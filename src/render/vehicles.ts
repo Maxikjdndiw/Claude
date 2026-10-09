@@ -6,12 +6,44 @@ import { heightAt } from '../sim/world/query';
 import type { World } from '../sim/world/types';
 import { buildModel, propMaterial } from './meshkit';
 
-const CAB = buildModel([
-  { shape: 'box', color: '#ffffff', size: [0.22, 0.2, 0.22], pos: [0.2, 0.05, 0] },
-  { shape: 'box', color: '#3b4450', size: [0.62, 0.05, 0.22], pos: [0, 0.02, 0] },
-]);
-const BOX = buildModel([{ shape: 'box', color: '#ffffff', size: [0.38, 0.22, 0.24], pos: [-0.1, 0.07, 0] }]);
-const MAX = 2000;
+/** Per vehicle type: a body tinted with the owner color and a cargo part tinted with the good color. */
+const MODELS: Record<string, { body: THREE.BufferGeometry; cargo: THREE.BufferGeometry; scale: number; water?: boolean }> = {
+  truck: {
+    body: buildModel([
+      { shape: 'box', color: '#ffffff', size: [0.22, 0.2, 0.22], pos: [0.2, 0.05, 0] },
+      { shape: 'box', color: '#3b4450', size: [0.62, 0.05, 0.22], pos: [0, 0.02, 0] },
+    ]),
+    cargo: buildModel([{ shape: 'box', color: '#ffffff', size: [0.38, 0.22, 0.24], pos: [-0.1, 0.07, 0] }]),
+    scale: 1.4,
+  },
+  train: {
+    body: buildModel([
+      { shape: 'box', color: '#ffffff', size: [0.5, 0.26, 0.24], pos: [0.75, 0.04, 0] },
+      { shape: 'cyl', color: '#3b4450', size: [0.06, 0.12, 0.06], pos: [0.9, 0.3, 0], segments: 5 },
+      { shape: 'box', color: '#3b4450', size: [2.1, 0.05, 0.2], pos: [-0.05, 0.02, 0] },
+    ]),
+    cargo: buildModel([
+      { shape: 'box', color: '#ffffff', size: [0.42, 0.2, 0.24], pos: [0.2, 0.06, 0] },
+      { shape: 'box', color: '#ffffff', size: [0.42, 0.2, 0.24], pos: [-0.27, 0.06, 0] },
+      { shape: 'box', color: '#ffffff', size: [0.42, 0.2, 0.24], pos: [-0.74, 0.06, 0] },
+    ]),
+    scale: 1.3,
+  },
+  ship: {
+    body: buildModel([
+      { shape: 'box', color: '#ffffff', size: [1.6, 0.22, 0.5], pos: [0, -0.08, 0] },
+      { shape: 'cone', color: '#ffffff', size: [0.5, 0.4, 0.5], pos: [0.9, -0.08, 0], segments: 4 },
+      { shape: 'box', color: '#f2f2f2', size: [0.3, 0.35, 0.4], pos: [-0.6, 0.14, 0] },
+    ]),
+    cargo: buildModel([
+      { shape: 'box', color: '#ffffff', size: [0.35, 0.18, 0.38], pos: [-0.15, 0.14, 0] },
+      { shape: 'box', color: '#ffffff', size: [0.35, 0.18, 0.38], pos: [0.25, 0.14, 0] },
+    ]),
+    scale: 1.5,
+    water: true,
+  },
+};
+const MAX = 1500;
 
 interface PathCache {
   key: string;
@@ -23,25 +55,27 @@ interface PathCache {
 /** Trucks (and later trains / ships) moving along their line paths. */
 export class VehiclesView {
   readonly group = new THREE.Group();
-  private cabs: THREE.InstancedMesh;
-  private boxes: THREE.InstancedMesh;
+  private meshes: Record<string, { body: THREE.InstancedMesh; cargo: THREE.InstancedMesh; n: number }> = {};
   private paths = new Map<number, PathCache>();
   private m4 = new THREE.Matrix4();
   private q = new THREE.Quaternion();
   private p = new THREE.Vector3();
-  private s = new THREE.Vector3(1.4, 1.4, 1.4);
+  private s = new THREE.Vector3(1, 1, 1);
   private up = new THREE.Vector3(0, 1, 0);
   private c = new THREE.Color();
   private empty = new THREE.Color('#d7dde2');
 
   constructor(private world: World) {
-    this.cabs = new THREE.InstancedMesh(CAB, propMaterial(), MAX);
-    this.boxes = new THREE.InstancedMesh(BOX, propMaterial(), MAX);
-    for (const m of [this.cabs, this.boxes]) {
-      m.count = 0;
-      m.castShadow = true;
-      m.frustumCulled = false;
-      this.group.add(m);
+    for (const [id, model] of Object.entries(MODELS)) {
+      const body = new THREE.InstancedMesh(model.body, propMaterial(), MAX);
+      const cargo = new THREE.InstancedMesh(model.cargo, propMaterial(), MAX);
+      for (const m of [body, cargo]) {
+        m.count = 0;
+        m.castShadow = true;
+        m.frustumCulled = false;
+        this.group.add(m);
+      }
+      this.meshes[id] = { body, cargo, n: 0 };
     }
   }
 
@@ -69,14 +103,17 @@ export class VehiclesView {
    * are, so vehicles glide smoothly between simulation steps.
    */
   update(state: GameState, frac: number, colors: string[]): void {
-    let i = 0;
+    for (const m of Object.values(this.meshes)) m.n = 0;
     for (const line of state.lines) {
       if (line.path.length < 2) continue;
+      const mm = this.meshes[line.vehicle] ?? this.meshes.truck;
+      const model = MODELS[line.vehicle] ?? MODELS.truck;
       const pc = this.cache(line);
       const speed = VEHICLES[line.vehicle].speed;
       const total = pc.cum[pc.cum.length - 1];
       const ownerColor = colors[line.owner] ?? '#888';
       for (const v of line.vehicles) {
+        const i = mm.n;
         if (i >= MAX) break;
         let d = v.idle ? v.pos : v.pos + v.dir * speed * frac;
         d = Math.max(0, Math.min(total, d));
@@ -97,23 +134,28 @@ export class VehiclesView {
         if (dx === 0 && dy === 0) dx = 1;
         // Drive on the right-hand side.
         const len = Math.hypot(dx, dy);
-        const ox = (-dy / len) * 0.11;
-        const oy = (dx / len) * 0.11;
+        const side = line.mode === 'road' ? 0.11 : line.mode === 'sea' ? 0.3 : 0;
+        const ox = (-dy / len) * side;
+        const oy = (dx / len) * side;
         this.q.setFromAxisAngle(this.up, Math.atan2(-dy, dx));
-        this.p.set(x + ox, Math.max(heightAt(this.world, x, y), 0) + 0.08, y + oy);
+        const ground = model.water ? 0.02 : Math.max(heightAt(this.world, x, y), 0) + 0.08 + (line.mode === 'rail' ? 0.04 : 0);
+        this.p.set(x + ox, ground, y + oy);
+        this.s.setScalar(model.scale);
         this.m4.compose(this.p, this.q, this.s);
-        this.cabs.setMatrixAt(i, this.m4);
-        this.boxes.setMatrixAt(i, this.m4);
-        this.cabs.setColorAt(i, this.c.set(ownerColor));
-        this.boxes.setColorAt(i, v.cargo > 0 ? this.c.set(GOOD[line.good].color) : this.empty);
-        i++;
+        mm.body.setMatrixAt(i, this.m4);
+        mm.cargo.setMatrixAt(i, this.m4);
+        mm.body.setColorAt(i, this.c.set(ownerColor));
+        mm.cargo.setColorAt(i, v.cargo > 0 ? this.c.set(GOOD[line.good].color) : this.empty);
+        mm.n++;
       }
     }
-    this.cabs.count = i;
-    this.boxes.count = i;
-    this.cabs.instanceMatrix.needsUpdate = true;
-    this.boxes.instanceMatrix.needsUpdate = true;
-    if (this.cabs.instanceColor) this.cabs.instanceColor.needsUpdate = true;
-    if (this.boxes.instanceColor) this.boxes.instanceColor.needsUpdate = true;
+    for (const m of Object.values(this.meshes)) {
+      m.body.count = m.n;
+      m.cargo.count = m.n;
+      m.body.instanceMatrix.needsUpdate = true;
+      m.cargo.instanceMatrix.needsUpdate = true;
+      if (m.body.instanceColor) m.body.instanceColor.needsUpdate = true;
+      if (m.cargo.instanceColor) m.cargo.instanceColor.needsUpdate = true;
+    }
   }
 }

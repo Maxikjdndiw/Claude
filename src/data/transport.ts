@@ -32,13 +32,44 @@ export const VEHICLES: Record<string, VehicleDef> = {
     perKm: 0.4,
     lifeYears: 8,
   },
+  train: {
+    id: 'train',
+    name: 'Freight train',
+    mode: 'rail',
+    capacity: 80,
+    speed: 28,
+    price: 48000,
+    dailyCost: 45,
+    perKm: 0.9,
+    lifeYears: 25,
+  },
+  ship: {
+    id: 'ship',
+    name: 'Cargo ship',
+    mode: 'sea',
+    capacity: 150,
+    speed: 20,
+    price: 70000,
+    dailyCost: 70,
+    perKm: 0.6,
+    lifeYears: 25,
+  },
 };
+
+/** Vehicle used on each network. */
+export const MODE_VEHICLE: Record<'road' | 'rail' | 'sea', string> = { road: 'truck', rail: 'train', sea: 'ship' };
 
 export const INFRA = {
   /** Road cost per km on flat land (multiplied by terrain difficulty). */
   roadPerCell: 260,
   /** Bridge cost per km over rivers. */
   bridgePerCell: 2600,
+  /** Railway track per km (flat land) and per km of rail bridge. */
+  railPerCell: 1300,
+  railBridgePerCell: 7000,
+  /** Survey a 12 km radius for hidden deposits. */
+  surveyCost: 9000,
+  surveyRadius: 12,
   /** Selling a vehicle returns this share of its book value. */
   vehicleResale: 0.5,
 };

@@ -6,6 +6,8 @@ import { marketWage } from '../../sim/labor';
 import { localTowns } from '../../sim/logistics';
 import { marginalProduct, maxWorkers, maintenance, potentialOutput, storageCap } from '../../sim/production';
 import { cls, money, pct, price, tons } from '../format';
+import { depositFor } from '../../sim/resources';
+import { RESOURCES } from '../../data/resources';
 import { useStore } from '../store';
 
 export function BuildingPanel({ game }: { game: Game }) {
@@ -77,12 +79,57 @@ export function BuildingPanel({ game }: { game: Game }) {
             <span>Capacity at full staff</span>
             <b>{tons(potentialOutput(st, b, maxWorkers(b)))}/day</b>
           </div>
-          {def.site.kind !== 'none' && (
+          {def.site.kind !== 'none' && def.site.kind !== 'coast' && (
             <div class="kv">
               <span>{def.site.label}</span>
-              <b>{pct(b.siteFactor)}</b>
+              <b class={cls(b.siteFactor < 0.5 && 'neg')}>{pct(b.siteFactor)}</b>
             </div>
           )}
+          {def.site.kind === 'deposit' &&
+            (() => {
+              const d = depositFor(st, def, b.x, b.y);
+              if (!d) return <p class="err">Deposit exhausted. Non-renewable resources run out: demolish or move on.</p>;
+              const years = b.rate > 0 ? d.amount / b.rate / 365 : Infinity;
+              return (
+                <>
+                  <div class="kv">
+                    <span>{RESOURCES[d.resource].name} left</span>
+                    <b>
+                      {tons(d.amount)} <span class="muted">of {tons(d.initial)}</span>
+                    </b>
+                  </div>
+                  <div class="meter">
+                    <div style={{ width: pct(d.amount / d.initial), background: RESOURCES[d.resource].color }} />
+                  </div>
+                  <div class="kv">
+                    <span>At this rate it lasts</span>
+                    <b>{isFinite(years) ? `${years.toFixed(1)} years` : '—'}</b>
+                  </div>
+                </>
+              );
+            })()}
+          {(def.site.kind === 'forest' || def.site.kind === 'fish') && (
+            <p class="muted small">
+              {def.site.kind === 'forest' ? 'Trees' : 'Fish'} regrow slowly. Harvesting faster than the regrowth rate depletes
+              the stock and output falls: the tragedy of the commons when several firms share it.
+            </p>
+          )}
+        </>
+      )}
+      {def.warehouse && (
+        <>
+          <h3>Stock</h3>
+          <div class="goods">
+            {Object.entries(b.storage)
+              .filter(([, q]) => q > 0.05)
+              .map(([g, q]) => (
+                <span key={g} class="dep">
+                  {GOOD[g].icon} {GOOD[g].name} {tons(q)}
+                </span>
+              ))}
+            {Object.values(b.storage).every((q) => q <= 0.05) && <span class="muted small">Empty. Ship goods here with a line.</span>}
+          </div>
+          <p class="muted small">Capacity {tons(storageCap(b))}. Nearby factories pick up their inputs from here automatically.</p>
         </>
       )}
 

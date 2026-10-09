@@ -26,6 +26,7 @@ interface TreeSlot {
   cell: number;
   kind: 0 | 1;
   index: number;
+  matrix: THREE.Matrix4;
 }
 
 /**
@@ -68,7 +69,7 @@ export class PropsView {
             const tv = hash2(x, y, 800 + k);
             const tint = new THREE.Color(1, 1, 1).multiplyScalar(0.95 + tv * 0.15);
             if (tv > 0.86 && !pine) tint.setRGB(1.15, 1.05, 0.7); // a few yellowish crowns
-            const slot: TreeSlot = { cell: c, kind: pine ? 0 : 1, index: pine ? pineM.length : roundM.length };
+            const slot: TreeSlot = { cell: c, kind: pine ? 0 : 1, index: pine ? pineM.length : roundM.length, matrix: mat };
             (pine ? pineM : roundM).push(mat);
             (pine ? pineC : roundC).push(tint);
             this.slots.push(slot);
@@ -104,20 +105,30 @@ export class PropsView {
     return mesh;
   }
 
-  /** Hide trees in a set of cells (e.g. cleared for a building). */
+  private cleared = new Set<number>();
+
+  /** Permanently remove trees from cells (cleared for a building or road). */
   clearCells(cells: Iterable<number>): void {
-    const zero = m4.makeScale(0, 0, 0);
-    let touched = false;
     for (const c of cells) {
-      const slots = this.byCell.get(c);
-      if (!slots) continue;
-      for (const sl of slots) (sl.kind === 0 ? this.pines : this.rounds).setMatrixAt(sl.index, zero);
-      this.byCell.delete(c);
-      touched = true;
+      this.cleared.add(c);
+      this.setDensity(c, 0, 1);
     }
-    if (touched) {
-      this.pines.instanceMatrix.needsUpdate = true;
-      this.rounds.instanceMatrix.needsUpdate = true;
-    }
+  }
+
+  /**
+   * Show a fraction of a cell's trees (forests thinned by logging regrow over
+   * time). `density` and `capacity` are the current and original forest values.
+   */
+  setDensity(cell: number, density: number, capacity: number): void {
+    const slots = this.byCell.get(cell);
+    if (!slots) return;
+    const frac = this.cleared.has(cell) ? 0 : Math.max(0, Math.min(1, density / Math.max(0.01, capacity)));
+    const show = Math.round(frac * slots.length + (frac > 0.15 && frac < 1 ? 0.3 : 0));
+    const zero = m4.makeScale(0, 0, 0);
+    slots.forEach((sl, i) => {
+      (sl.kind === 0 ? this.pines : this.rounds).setMatrixAt(sl.index, i < show ? sl.matrix : zero);
+    });
+    this.pines.instanceMatrix.needsUpdate = true;
+    this.rounds.instanceMatrix.needsUpdate = true;
   }
 }

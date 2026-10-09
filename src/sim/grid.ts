@@ -13,6 +13,7 @@ export class Occupancy {
   /** 0 = free, >0 = building id, TOWN_CELL = houses. */
   readonly cells: Int32Array;
   readonly road: Uint8Array;
+  readonly rail: Uint8Array;
   /** Town id -> radius of its houses (km). */
   townRadius: number[] = [];
   layouts: TownLayout[] = [];
@@ -20,15 +21,18 @@ export class Occupancy {
   constructor(private world: World) {
     this.cells = new Int32Array(world.size * world.size);
     this.road = new Uint8Array(world.size * world.size);
+    this.rail = new Uint8Array(world.size * world.size);
   }
 
   rebuild(state: GameState): void {
     const size = this.world.size;
     this.cells.fill(0);
     this.road.fill(0);
+    this.rail.fill(0);
     for (const c of state.roads) this.road[c] = 1;
+    for (const c of state.rails) this.rail[c] = 1;
     for (const b of state.buildings) this.mark(b.id, b.type, b.x, b.y);
-    const layouts = layoutTowns(this.world, state.towns, (c) => this.road[c] === 1 || this.cells[c] > 0);
+    const layouts = layoutTowns(this.world, state.towns, (c) => this.road[c] === 1 || this.rail[c] === 1 || this.cells[c] > 0);
     this.townRadius = [];
     this.layouts = layouts;
     for (const l of layouts) {

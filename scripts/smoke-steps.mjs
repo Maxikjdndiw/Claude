@@ -97,9 +97,61 @@ export default async function steps(page, out) {
   });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${out}/07-truck.png` });
+  // Milestone 4: research panel, a mine digging a pit, rail + ship lines.
+  await page.evaluate(() => {
+    const g = window.game;
+    const { commands, tech } = window.__dbg;
+    const s = g.state;
+    s.companies[0].cash = 3e6;
+    tech.buyLicense(s, 0, 'shipping');
+    tech.buyLicense(s, 0, 'steam');
+    tech.buyLicense(s, 0, 'railways');
+    // Debug: a second office next to an iron deposit so the mine is in build range.
+    const dep = s.deposits.find((d) => d.resource === 'iron' && !d.hidden);
+    const tryPlace = (type, x, y, r) => {
+      for (let d = 0; d < r; d++)
+        for (let oy = -d; oy <= d; oy++)
+          for (let ox = -d; ox <= d; ox++) {
+            if (Math.max(Math.abs(ox), Math.abs(oy)) !== d) continue;
+            const res = commands.build(g.sim, 0, type, x + ox, y + oy);
+            if (res.ok) return res.building;
+          }
+      return null;
+    };
+    tryPlace('hq', dep.x + 6, dep.y + 3, 8);
+    const mine = tryPlace('iron_mine', dep.x + 3, dep.y, 8);
+    if (mine) {
+      mine.town = 0;
+      mine.buildLeft = 1;
+    }
+    window.__mineDep = dep;
+    g.setLeftPanel('research');
+    g.afterChange();
+  });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${out}/08-research.png` });
+  await page.evaluate(() => {
+    const g = window.game;
+    const mine = g.state.buildings.find((b) => b.type === 'iron_mine');
+    if (mine) {
+      mine.workers = mine.targetWorkers = 24;
+    }
+    // Pretend most of the deposit has been mined to see a deep pit.
+    const dep0 = window.__mineDep;
+    dep0.amount = dep0.initial * 0.35;
+    g.advance(30);
+    g.setLeftPanel('research');
+    const dep = window.__mineDep;
+    g.view.rig.focus(dep.x + 0.5, dep.y + 0.5, 24, true);
+    g.view.rig.setView(0.9, 0.75, 24, true);
+    if (g.ui.state.showResources) g.toggleResources();
+    if (mine) g.selectBuilding(mine.id);
+  });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/09-mine-pit.png` });
   const summary = await page.evaluate(() => {
     const s = window.game.state;
-    return { day: s.day, cash: Math.round(s.companies[0].cash), buildings: s.buildings.map((b) => [b.type, b.workers, b.status]), lines: s.lines.map((l) => [l.status, l.length, l.vehicles, l.last, l.from, l.to]) };
+    return { day: s.day, cash: Math.round(s.companies[0].cash), buildings: s.buildings.map((b) => [b.type, b.workers, b.status]), lines: s.lines.map((l) => [l.status, l.length, l.last]), mineDep: window.__mineDep && [window.__mineDep.amount, window.__mineDep.initial, window.__mineDep.pitDepth, window.__mineDep.pitBase, window.game.world.heights[window.__mineDep.y * window.game.world.n + window.__mineDep.x], window.game.view.terrain.world === window.game.sim.world, Object.keys(s.terrainEdits).length, window.__mineDep.x, window.__mineDep.y, (() => { const d = window.__mineDep; let best = 99; for (const m of window.game.view.terrain.meshes) { const p = m.geometry.attributes.position.array; for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i] - d.x) < 1 && Math.abs(p[i + 2] - d.y) < 1) best = Math.min(best, p[i + 1]); } return best; })(), Array.from(window.game.view.terrain.dug).filter(Boolean).length] };
   });
   console.log(JSON.stringify(summary));
 }

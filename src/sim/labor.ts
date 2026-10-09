@@ -45,8 +45,9 @@ export function updateLabor(state: GameState, rng: SimRng): void {
       if (quits > 0) {
         b.workers -= quits;
         town.unemployed += quits;
-        if (gap > 0.05 && b.owner === 0) {
-          emit(state, 'bad', `${quits} worker${quits > 1 ? 's' : ''} quit at your ${def.name}: pay is ${Math.round(gap * 100)}% below the ${town.name} market wage.`, {
+        if (gap > 0.05 && b.owner === 0 && (b.quitNotice === undefined || state.day - b.quitNotice > 30)) {
+          b.quitNotice = state.day;
+          emit(state, 'bad', `Workers are quitting your ${def.name}: pay is ${Math.round(gap * 100)}% below the ${town.name} market wage.`, {
             concept: 'wages',
             at: { x: b.x, y: b.y },
             owner: b.owner,

@@ -7,6 +7,7 @@ import { FinancePanel } from '../panels/FinancePanel';
 import { TopBar } from '../panels/TopBar';
 import { TownPanel } from '../panels/TownPanel';
 import { LineDialog, LinesPanel, ToolHint } from '../panels/Transport';
+import { ResearchPanel } from '../panels/Research';
 
 /** In-game HUD. */
 export function Playing({ game }: { game: Game }) {
@@ -20,6 +21,7 @@ export function Playing({ game }: { game: Game }) {
       {left === 'finance' && <FinancePanel game={game} />}
       {left === 'log' && <NewsPanel game={game} />}
       {left === 'lines' && <LinesPanel game={game} />}
+      {left === 'research' && <ResearchPanel game={game} />}
       <ToolHint game={game} />
       {building && <PlacementHint game={game} />}
       {!building && selB !== null && <BuildingPanel game={game} />}

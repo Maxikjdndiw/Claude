@@ -1,6 +1,6 @@
 import type { DepositSeed } from './world/types';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export const LEDGER_CATS = [
   'sales',
@@ -9,6 +9,7 @@ export const LEDGER_CATS = [
   'transport',
   'maintenance',
   'training',
+  'research',
   'depreciation',
   'interest',
   'tax',
@@ -44,6 +45,8 @@ export interface Company {
   negativeDays: number;
   bankrupt: boolean;
   hq: { x: number; y: number } | null;
+  techs: string[];
+  research: { tech: string; daysLeft: number } | null;
 }
 
 export interface BuildingStats {
@@ -85,6 +88,8 @@ export interface Building {
   status: string;
   month: BuildingStats;
   last: BuildingStats;
+  /** Day of the last 'workers quit' notice (avoids spamming the news). */
+  quitNotice?: number;
 }
 
 export interface MarketState {
@@ -119,6 +124,16 @@ export interface Town {
   market: Record<string, MarketState>;
 }
 
+/** A deposit as tracked during play. */
+export interface Deposit extends DepositSeed {
+  /** Tons at discovery (amount is what remains). */
+  initial: number;
+  /** Terrain height of the pit rim, set when digging starts. */
+  pitBase?: number;
+  /** Current pit depth/radius (for rendering and terrain edits). */
+  pitDepth?: number;
+}
+
 export interface Endpoint {
   kind: 'building' | 'town';
   id: number;
@@ -136,9 +151,12 @@ export interface Vehicle {
 }
 
 /** A transport line: vehicles shuttle one good from `from` to `to`. */
+export type Mode = 'road' | 'rail' | 'sea';
+
 export interface Line {
   id: number;
   owner: number;
+  mode: Mode;
   vehicle: string;
   from: Endpoint;
   to: Endpoint;
@@ -187,8 +205,12 @@ export interface GameState {
   towns: Town[];
   /** Road cells (shared infrastructure). */
   roads: number[];
+  /** Railway cells. */
+  rails: number[];
+  /** Renewable resources that changed from their initial value (cell -> value). */
+  fields: { forest: Record<number, number>; fish: Record<number, number> };
   lines: Line[];
-  deposits: DepositSeed[];
+  deposits: Deposit[];
   /** Terrain height overrides (vertex index -> height): flattened pads, mine pits. */
   terrainEdits: Record<number, number>;
   /** Price level index (1 = start). */

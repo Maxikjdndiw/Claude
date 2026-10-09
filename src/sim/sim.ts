@@ -11,6 +11,8 @@ import { isMonthStart } from './time';
 import { applyTerrainEdits, type Rect } from './terrainEdit';
 import { closeLinesMonth, updateTransport } from './transport';
 import { updateTowns } from './towns';
+import { updateResearch } from './tech';
+import { regrow } from './resources';
 
 /** Simulation context: static world + mutable state + derived caches. */
 export class Sim {
@@ -19,6 +21,8 @@ export class Sim {
   /** Terrain regions changed since the renderer last looked (rendering hint). */
   terrainDirty: Rect[] = [];
   roadsDirty = true;
+  forestDirty = true;
+  depositsDirty = true;
   townsDirty = true;
 
   constructor(
@@ -36,7 +40,9 @@ export class Sim {
     const s = this.state;
     if (s.gameOver) return;
     updateLabor(s, this.rng);
-    updateProduction(s);
+    updateResearch(s);
+    updateProduction(this);
+    regrow(this);
     updateLocalLogistics(s);
     updateTransport(s);
     updateMarkets(s);

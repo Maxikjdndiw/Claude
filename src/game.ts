@@ -9,7 +9,10 @@ import { hashString } from './sim/rng';
 import { startNewGame } from './sim/setup';
 import { Sim } from './sim/sim';
 import type { Endpoint, GameEvent, GameState } from './sim/state';
-import { buildRoad, planRoad, type RoadPlan } from './sim/roads';
+import { buildRoad, planRoad, type RoadPlan, type TrackMode } from './sim/roads';
+import { pitRadius, survey } from './sim/resources';
+import { isUnlocked } from './sim/tech';
+import { INFRA } from './data/transport';
 import { layoutTowns } from './sim/world/townLayout';
 import { generateWorld } from './sim/world/generate';
 import { analyzeSite, biomeOf, heightAt, type SiteAnalysis } from './sim/world/query';
@@ -17,8 +20,8 @@ import type { World } from './sim/world/types';
 import { Store } from './ui/store';
 
 export type Screen = 'menu' | 'pickStart' | 'playing';
-export type LeftPanel = null | 'finance' | 'log' | 'lines';
-export type Tool = null | 'road' | 'line';
+export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research';
+export type Tool = null | 'road' | 'rail' | 'line' | 'survey';
 
 export const START_RADIUS = 14;
 /** Real seconds per simulated day at 1x speed. */
@@ -82,6 +85,7 @@ export class Game {
   private acc = 0;
   private toastId = 0;
   private lastSpeed = 1;
+  private prevForest = new Set<number>();
 
   constructor(viewport: HTMLElement) {
     this.view = new View(viewport);
@@ -264,6 +268,7 @@ export class Game {
     if (!sim) return;
     const v = this.view;
     if (sim.terrainDirty.length) {
+      this.markPits();
       for (const r of sim.terrainDirty) {
         v.terrain?.updateRegion(r.x0, r.y0, r.x1, r.y1);
         const cells: number[] = [];
@@ -275,8 +280,20 @@ export class Game {
       sim.terrainDirty = [];
     }
     if (sim.roadsDirty) {
-      v.roads?.rebuild(sim.state.roads);
+      v.roads?.rebuild(sim.state.roads, sim.state.rails);
+      v.props?.clearCells([...sim.state.roads, ...sim.state.rails]);
       sim.roadsDirty = false;
+    }
+    if (sim.forestDirty) {
+      const now = new Set(Object.keys(sim.state.fields.forest).map(Number));
+      for (const c of now) v.props?.setDensity(c, sim.state.fields.forest[c], sim.world.forest[c]);
+      for (const c of this.prevForest) if (!now.has(c)) v.props?.setDensity(c, sim.world.forest[c], sim.world.forest[c]);
+      this.prevForest = now;
+      sim.forestDirty = false;
+    }
+    if (sim.depositsDirty) {
+      v.overlays?.setDeposits(sim.state.deposits);
+      sim.depositsDirty = false;
     }
     if (sim.townsDirty) {
       v.towns?.rebuild(sim.state.towns, sim.occ.layouts);
@@ -299,6 +316,23 @@ export class Game {
     }
     const speed = sim.state.gameOver ? 0 : this.ui.state.speed;
     this.ui.set({ tick: this.ui.state.tick + 1, toasts, speed, selectedBuilding: b ? b.id : null });
+  }
+
+  /** Color terrain cells inside mine pits. */
+  private markPits(): void {
+    const sim = this.sim!;
+    const t = this.view.terrain;
+    if (!t) return;
+    const size = sim.world.size;
+    for (const d of sim.state.deposits) {
+      if (d.pitDepth === undefined) continue;
+      const r = pitRadius(d);
+      for (let y = Math.floor(d.y - r); y <= Math.ceil(d.y + r); y++)
+        for (let x = Math.floor(d.x - r); x <= Math.ceil(d.x + r); x++) {
+          if (x < 0 || y < 0 || x >= size || y >= size) continue;
+          if (Math.hypot(x - d.x, y - d.y) <= r - 0.3) t.dug[y * size + x] = 1;
+        }
+    }
   }
 
   dismissToast(id: number): void {
@@ -368,6 +402,10 @@ export class Game {
   // ---------------------------------------------------------------- transport tools
 
   setTool(tool: Tool): void {
+    if (tool === 'rail' && this.state && !isUnlocked(this.state.companies[0], 'rail')) {
+      this.flashError('Research Railways first');
+      return;
+    }
     this.cancelBuild();
     this.view.roads?.showPreview(null);
     this.view.overlays!.cursor.visible = false;
@@ -404,8 +442,9 @@ export class Game {
       this.ui.set({ roadStart: cell });
       return;
     }
-    const plan = planRoad(sim, start, cell);
-    const res = buildRoad(sim, 0, start, cell);
+    const mode = this.trackMode();
+    const plan = planRoad(sim, start, cell, mode);
+    const res = buildRoad(sim, 0, start, cell, mode);
     if (!res.ok) {
       this.flashError(res.reason ?? 'Cannot build this road');
       return;
@@ -423,9 +462,20 @@ export class Game {
     if (start === null) return;
     const prev = this.ui.state.roadPlan;
     if (prev && prev.path[prev.path.length - 1] === cell) return;
-    const plan = planRoad(this.sim!, start, cell);
+    const plan = planRoad(this.sim!, start, cell, this.trackMode());
     this.view.roads?.showPreview(plan ? plan.path : null);
     this.ui.set({ roadPlan: plan });
+  }
+
+  private trackMode(): TrackMode {
+    return this.ui.state.tool === 'rail' ? 'rail' : 'road';
+  }
+
+  private surveyClick(cx: number, cy: number): void {
+    const sim = this.sim!;
+    const res = survey(sim, 0, cx, cy);
+    if (!res.ok) this.flashError(res.reason ?? 'Cannot survey');
+    this.afterChange();
   }
 
   private lineClick(cx: number, cy: number): void {
@@ -501,9 +551,12 @@ export class Game {
     } else if (screen === 'playing' && this.ui.state.buildType) {
       const p = this.view.pick(e.clientX, e.clientY);
       if (p) this.updatePlacement(p.gx, p.gy);
-    } else if (screen === 'playing' && this.ui.state.tool === 'road') {
+    } else if (screen === 'playing' && (this.ui.state.tool === 'road' || this.ui.state.tool === 'rail')) {
       const p = this.view.pick(e.clientX, e.clientY);
       if (p) this.roadHover(p.cy * this.world.size + p.cx);
+    } else if (screen === 'playing' && this.ui.state.tool === 'survey') {
+      const p = this.view.pick(e.clientX, e.clientY);
+      if (p) this.view.overlays!.placeCursor(p.cx + 0.5, p.cy + 0.5, INFRA.surveyRadius, true);
     }
   }
 
@@ -523,8 +576,12 @@ export class Game {
       this.tryBuild();
       return;
     }
-    if (this.ui.state.tool === 'road') {
+    if (this.ui.state.tool === 'road' || this.ui.state.tool === 'rail') {
       this.roadClick(p.cy * this.world.size + p.cx);
+      return;
+    }
+    if (this.ui.state.tool === 'survey') {
+      this.surveyClick(p.cx, p.cy);
       return;
     }
     if (this.ui.state.tool === 'line') {

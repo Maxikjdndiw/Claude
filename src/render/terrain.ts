@@ -13,7 +13,7 @@ const shallow = new THREE.Color(PALETTE.shallowFloor);
 const deep = new THREE.Color(PALETTE.seabed);
 const rock = new THREE.Color(PALETTE.rock);
 const sand = new THREE.Color(BIOMES.beach.color);
-const quarry = new THREE.Color('#c9b48f');
+const quarry = new THREE.Color('#c6a676');
 const lakeFloor = new THREE.Color('#8fc0a6');
 
 /** Horizontal jitter of a vertex so the grid does not look like a grid. */

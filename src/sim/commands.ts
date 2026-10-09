@@ -10,6 +10,9 @@ import type { Sim } from './sim';
 import { emptyStats, type Building } from './state';
 import { cellSlope } from './world/generate';
 import { flattenFootprint } from './terrainEdit';
+import { depositFor, isCoastal } from './resources';
+import { canBuildType } from './tech';
+import { RESOURCES } from '../data/resources';
 
 export interface Result {
   ok: boolean;
@@ -61,8 +64,21 @@ export function checkPlacement(sim: Sim, owner: number, type: string, x: number,
       return { ...res, reason: `Out of reach: build within ${ECON.buildRange} km of your HQ or another building` };
   }
 
-  const siteFactor = siteFactorAt(world, def, x, y);
-  if (def.site.kind === 'fertility' && siteFactor < 0.45) return { ...res, siteFactor, reason: 'Soil is too poor for farming here' };
+  if (!canBuildType(company, type)) return { ...res, reason: 'Requires research first (see Research)' };
+  const siteFactor = siteFactorAt(world, def, x, y, state);
+  const site = def.site.kind;
+  if (site === 'fertility' && siteFactor < 0.45) return { ...res, siteFactor, reason: 'Soil is too poor for farming here' };
+  if (site === 'forest' && siteFactor < 0.3) return { ...res, siteFactor, reason: 'Not enough forest around here' };
+  if (site === 'fish' && (!isCoastal(world, def, x, y) || siteFactor < 0.15))
+    return { ...res, siteFactor, reason: 'Must be on the sea shore near fish stocks' };
+  if (site === 'coast' && !isCoastal(world, def, x, y)) return { ...res, reason: 'Must be built on the sea shore' };
+  if (site === 'deposit') {
+    const d = depositFor(state, def, x, y);
+    const name = RESOURCES[def.site.resource!].name.toLowerCase();
+    if (!d) return { ...res, reason: `Place it next to a known ${name} deposit (survey to find hidden ones)` };
+    if (Math.hypot(d.x + 0.5 - c.x, d.y + 0.5 - c.y) < d.radius * 0.55 + 1)
+      return { ...res, reason: 'Too close to the deposit center: leave room for the pit' };
+  }
 
   const cost = Math.round((def.cost * costMul * (1 + 0.25 * maxSlope) * state.priceLevel) / 100) * 100;
   const laborTown = laborTownFor(state, c.x, c.y);
@@ -95,7 +111,7 @@ export function build(sim: Sim, owner: number, type: string, x: number, y: numbe
     buildLeft: def.buildDays,
     workers: 0,
     targetWorkers: 0,
-    wage: town ? Math.round(town.wage * 10) / 10 : ECON.baseWage,
+    wage: town ? Math.ceil(town.wage * 10) / 10 : ECON.baseWage * sim.state.priceLevel,
     skill: 0,
     trainingLeft: 0,
     town: chk.laborTown,

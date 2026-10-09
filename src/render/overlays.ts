@@ -30,7 +30,8 @@ export class OverlayView {
     for (const d of deposits) {
       if (d.hidden || d.amount <= 0) continue;
       const def = RESOURCES[d.resource];
-      const h = surfaceAt(this.world, d.x + 0.5, d.y + 0.5);
+      const mining = (d as { pitBase?: number }).pitBase !== undefined;
+      const h = mining ? (d as { pitBase?: number }).pitBase! + 1 : surfaceAt(this.world, d.x + 0.5, d.y + 0.5);
       const mat = new THREE.MeshStandardMaterial({ color: def.color, flatShading: true, roughness: 0.4, emissive: def.color, emissiveIntensity: 0.15 });
       const gem = new THREE.Mesh(GEM, mat);
       gem.position.set(d.x + 0.5, h + 3.2, d.y + 0.5);
@@ -47,7 +48,9 @@ export class OverlayView {
       );
       disc.position.set(d.x + 0.5, h + 0.12, d.y + 0.5);
       disc.renderOrder = 3;
-      this.markers.add(gem, disc);
+      this.markers.add(gem);
+      // Once mining starts the pit itself shows where the deposit is.
+      if (!mining) this.markers.add(disc);
       this.gems.push(gem);
     }
   }

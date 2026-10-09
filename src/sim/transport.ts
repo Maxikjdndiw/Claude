@@ -1,14 +1,15 @@
 import { BUILDING } from '../data/buildings';
 import { GOOD } from '../data/goods';
-import { INFRA, VEHICLES } from '../data/transport';
+import { INFRA, MODE_VEHICLE, VEHICLES } from '../data/transport';
 import { emit } from './events';
 import { book, invest } from './finance';
 import { buyable, buyFromMarket, sellToMarket } from './market';
 import { pathLength } from './pathfinding';
 import { storageCap } from './production';
-import { endpointPos, roadRoute } from './roads';
+import { endpointPos, networkRoute } from './roads';
+import { transportFactors } from './tech';
 import type { Sim } from './sim';
-import { emptyLineStats, type Building, type Endpoint, type GameState, type Line, type Vehicle } from './state';
+import { emptyLineStats, type Building, type Company, type Endpoint, type GameState, type Line, type Mode, type Vehicle } from './state';
 
 export interface Result {
   ok: boolean;
@@ -26,14 +27,19 @@ export function shippableGoods(state: GameState, from: Endpoint, to: Endpoint): 
   let goods: string[] = Object.keys(GOOD);
   if (from.kind === 'building') {
     const b = state.buildings.find((x) => x.id === from.id);
-    const r = b && BUILDING[b.type].recipe;
-    goods = r ? Object.keys(r.outputs) : [];
+    const def = b && BUILDING[b.type];
+    if (def && def.warehouse) {
+      // Ship what is in stock first, then everything else.
+      goods = [...goods].sort((a, c) => (b!.storage[c] ?? 0) - (b!.storage[a] ?? 0));
+    } else goods = def?.recipe ? Object.keys(def.recipe.outputs) : [];
   }
   if (to.kind === 'building') {
     const b = state.buildings.find((x) => x.id === to.id);
-    const r = b && BUILDING[b.type].recipe;
-    const ins = r ? Object.keys(r.inputs) : [];
-    goods = goods.filter((g) => ins.includes(g));
+    const def = b && BUILDING[b.type];
+    if (!def?.warehouse) {
+      const ins = def?.recipe ? Object.keys(def.recipe.inputs) : [];
+      goods = goods.filter((g) => ins.includes(g));
+    }
   }
   return goods;
 }
@@ -45,28 +51,61 @@ export interface LineEstimate {
   costPerTon: number;
 }
 
-export function estimateLine(length: number, vehicle = 'truck'): LineEstimate {
+/**
+ * Fuel price relative to normal (average over all towns). Running costs per
+ * km scale with it, so a fuel price shock raises everyone's transport costs.
+ */
+export function fuelIndex(state: GameState): number {
+  if (!state.towns.length) return 1;
+  const avg = state.towns.reduce((a, t) => a + t.market.fuel.price, 0) / state.towns.length;
+  return avg / (GOOD.fuel.basePrice * state.priceLevel);
+}
+
+function runningFactors(state: GameState, c: Company | null, mode: Mode) {
+  const tf = c ? transportFactors(c, mode) : { perKm: 1, daily: 1 };
+  return {
+    perKm: tf.perKm * (0.5 + 0.5 * fuelIndex(state)) * state.priceLevel,
+    daily: tf.daily * state.priceLevel,
+  };
+}
+
+export function estimateLine(length: number, vehicle = 'truck', state?: GameState, owner = 0): LineEstimate {
   const v = VEHICLES[vehicle];
+  const f = state ? runningFactors(state, state.companies[owner], v.mode) : { perKm: 1, daily: 1 };
   const roundTripDays = (2 * length) / v.speed + 0.25;
   const tonsPerDayPerVehicle = v.capacity / roundTripDays;
   const depreciation = v.price / (v.lifeYears * 365);
-  const costPerTon = (2 * length * v.perKm + (v.dailyCost + depreciation) * roundTripDays) / v.capacity;
+  const costPerTon = (2 * length * v.perKm * f.perKm + (v.dailyCost * f.daily + depreciation) * roundTripDays) / v.capacity;
   return { length, roundTripDays, tonsPerDayPerVehicle, costPerTon };
 }
 
-export function planLine(sim: Sim, from: Endpoint, to: Endpoint): { path: number[]; length: number } | { reason: string } {
+const NOT_CONNECTED: Record<Mode, string> = {
+  road: 'Not connected by road: build a road to both places first',
+  rail: 'Not connected by rail: lay track to both places first',
+  sea: 'No sea route: both ends must be a harbor or a coastal town on the same sea',
+};
+
+export function planLine(sim: Sim, from: Endpoint, to: Endpoint, mode: Mode = 'road'): { path: number[]; length: number } | { reason: string } {
   if (from.kind === to.kind && from.id === to.id) return { reason: 'Pick two different places' };
-  const path = roadRoute(sim, from, to);
-  if (!path) return { reason: 'Not connected by road: build a road to both places first' };
+  const path = networkRoute(sim, from, to, mode);
+  if (!path) return { reason: NOT_CONNECTED[mode] };
   return { path, length: pathLength(sim.world.size, path) };
 }
 
-export function createLine(sim: Sim, owner: number, from: Endpoint, to: Endpoint, good: string, vehicles: number): Result & { line?: Line } {
+export function createLine(
+  sim: Sim,
+  owner: number,
+  from: Endpoint,
+  to: Endpoint,
+  good: string,
+  vehicles: number,
+  mode: Mode = 'road',
+): Result & { line?: Line } {
   const { state } = sim;
-  const plan = planLine(sim, from, to);
+  const plan = planLine(sim, from, to, mode);
   if ('reason' in plan) return { ok: false, reason: plan.reason };
   if (!shippableGoods(state, from, to).includes(good)) return { ok: false, reason: 'This good cannot be shipped on this line' };
-  const v = VEHICLES.truck;
+  const v = VEHICLES[MODE_VEHICLE[mode]];
   const cost = v.price * vehicles * state.priceLevel;
   const c = state.companies[owner];
   if (c.cash < cost) return { ok: false, reason: 'Not enough cash for the trucks' };
@@ -74,7 +113,8 @@ export function createLine(sim: Sim, owner: number, from: Endpoint, to: Endpoint
   const line: Line = {
     id: state.nextId++,
     owner,
-    vehicle: 'truck',
+    mode,
+    vehicle: v.id,
     from,
     to,
     good,
@@ -89,7 +129,7 @@ export function createLine(sim: Sim, owner: number, from: Endpoint, to: Endpoint
   };
   for (let i = 0; i < vehicles; i++) line.vehicles.push(newVehicle());
   state.lines.push(line);
-  emit(state, 'info', `New truck line: ${GOOD[good].name} from ${endpointName(state, from)} to ${endpointName(state, to)}.`, {
+  emit(state, 'info', `New ${v.name.toLowerCase()} line: ${GOOD[good].name} from ${endpointName(state, from)} to ${endpointName(state, to)}.`, {
     concept: 'transport-costs',
     owner,
   });
@@ -250,7 +290,8 @@ export function updateTransport(state: GameState): void {
         }
       }
     }
-    const running = km * def.perKm * state.priceLevel + line.vehicles.length * def.dailyCost * state.priceLevel;
+    const f = runningFactors(state, company, line.mode);
+    const running = km * def.perKm * f.perKm + line.vehicles.length * def.dailyCost * f.daily;
     const dep = Math.min(line.bookValue, line.invested / (def.lifeYears * 365));
     line.bookValue -= dep;
     book(company, 'transport', running);

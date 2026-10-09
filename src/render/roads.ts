@@ -5,24 +5,40 @@ import type { World } from '../sim/world/types';
 
 const ROAD = new THREE.Color('#e3dccb');
 const BRIDGE = new THREE.Color('#b48e64');
+const BALLAST = new THREE.Color('#aaa398');
+const TRACK = new THREE.Color('#5f5b57');
 const WIDTH = 0.42;
+
+interface Style {
+  width: number;
+  color: THREE.Color;
+  bridge: THREE.Color;
+  lift: number;
+}
+
+const ROAD_STYLE: Style = { width: WIDTH, color: ROAD, bridge: BRIDGE, lift: 0 };
+const BALLAST_STYLE: Style = { width: 0.4, color: BALLAST, bridge: BRIDGE, lift: 0.01 };
+const TRACK_STYLE: Style = { width: 0.16, color: TRACK, bridge: TRACK, lift: 0.03 };
 
 /** Flat ribbons connecting road cells, draped over the terrain. */
 export class RoadsView {
   readonly group = new THREE.Group();
-  private mesh: THREE.Mesh | null = null;
   private preview: THREE.Mesh | null = null;
   private material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.DoubleSide });
   private previewMat = new THREE.MeshBasicMaterial({ color: '#ffd36b', transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide });
 
   constructor(private world: World) {}
 
+  private lift = 0;
+
   private y(gx: number, gy: number, bridge: boolean): number {
-    return bridge ? surfaceAt(this.world, gx, gy) + 0.22 : heightAt(this.world, gx, gy) + 0.06;
+    return (bridge ? surfaceAt(this.world, gx, gy) + 0.22 : heightAt(this.world, gx, gy) + 0.06) + this.lift;
   }
 
-  /** Build ribbon geometry for a set of road cells. */
-  private geometry(cells: Set<number>, width: number): THREE.BufferGeometry {
+  /** Build ribbon geometry for a set of track cells. */
+  private geometry(cells: Set<number>, style: Style): THREE.BufferGeometry {
+    const width = style.width;
+    this.lift = style.lift;
     const w = this.world;
     const size = w.size;
     const pos: number[] = [];
@@ -38,7 +54,7 @@ export class RoadsView {
       const len = Math.hypot(dx, dy);
       const nx = (-dy / len) * (width / 2);
       const ny = (dx / len) * (width / 2);
-      const c = bridge ? BRIDGE : ROAD;
+      const c = bridge ? style.bridge : style.color;
       for (let i = 0; i < steps; i++) {
         const t0 = i / steps;
         const t1 = (i + 1) / steps;
@@ -57,7 +73,7 @@ export class RoadsView {
       }
     };
     const joint = (cx: number, cy: number, bridge: boolean) => {
-      const c = bridge ? BRIDGE : ROAD;
+      const c = bridge ? style.bridge : style.color;
       const h = this.y(cx, cy, bridge) + 0.002;
       const r = width / 2;
       const n = 6;
@@ -91,15 +107,25 @@ export class RoadsView {
     return geo;
   }
 
-  rebuild(roads: number[]): void {
-    if (this.mesh) {
-      this.group.remove(this.mesh);
-      this.mesh.geometry.dispose();
+  private meshes: THREE.Mesh[] = [];
+
+  rebuild(roads: number[], rails: number[] = []): void {
+    for (const m of this.meshes) {
+      this.group.remove(m);
+      m.geometry.dispose();
     }
-    this.mesh = new THREE.Mesh(this.geometry(new Set(roads), WIDTH), this.material);
-    this.mesh.receiveShadow = true;
-    this.mesh.renderOrder = 1;
-    this.group.add(this.mesh);
+    this.meshes = [];
+    const add = (cells: number[], style: Style) => {
+      if (!cells.length) return;
+      const m = new THREE.Mesh(this.geometry(new Set(cells), style), this.material);
+      m.receiveShadow = true;
+      m.renderOrder = 1;
+      this.meshes.push(m);
+      this.group.add(m);
+    };
+    add(roads, ROAD_STYLE);
+    add(rails, BALLAST_STYLE);
+    add(rails, TRACK_STYLE);
   }
 
   /** Show a planned road (or clear with null). */
@@ -110,7 +136,7 @@ export class RoadsView {
       this.preview = null;
     }
     if (!cells || !cells.length) return;
-    this.preview = new THREE.Mesh(this.geometry(new Set(cells), WIDTH * 1.25), this.previewMat);
+    this.preview = new THREE.Mesh(this.geometry(new Set(cells), { ...ROAD_STYLE, width: WIDTH * 1.25 }), this.previewMat);
     this.preview.renderOrder = 9;
     this.group.add(this.preview);
   }

@@ -19,6 +19,7 @@ const ROWS: { key: keyof Ledger; label: string; kind: 'var' | 'fixed' | 'other' 
   { key: 'wages', label: 'Wages', kind: 'var' },
   { key: 'maintenance', label: 'Upkeep', kind: 'fixed' },
   { key: 'training', label: 'Training', kind: 'fixed' },
+  { key: 'research', label: 'Research & surveys', kind: 'fixed' },
   { key: 'depreciation', label: 'Depreciation', kind: 'fixed' },
   { key: 'interest', label: 'Interest', kind: 'other' },
   { key: 'tax', label: 'Corporate tax', kind: 'other' },
@@ -61,7 +62,7 @@ function Statement({ cols }: { cols: { label: string; l: Ledger }[] }) {
             );
           })}
         </tr>
-        {ROWS.slice(3, 6).map((r) => (
+        {ROWS.slice(3, 7).map((r) => (
           <tr key={r.key}>
             <td title="Fixed cost: paid regardless of output">− {r.label}</td>
             {cols.map((c) => (
@@ -80,7 +81,7 @@ function Statement({ cols }: { cols: { label: string; l: Ledger }[] }) {
             );
           })}
         </tr>
-        {ROWS.slice(6).map((r) => (
+        {ROWS.slice(7).map((r) => (
           <tr key={r.key}>
             <td>− {r.label}</td>
             {cols.map((c) => (

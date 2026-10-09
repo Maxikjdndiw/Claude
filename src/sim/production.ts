@@ -2,14 +2,17 @@ import { BUILDING, type BuildingDef } from '../data/buildings';
 import { ECON } from '../data/economy';
 import { emit } from './events';
 import type { Building, GameState } from './state';
+import type { Sim } from './sim';
+import { extract, harvest, resourceSiteFactor } from './resources';
+import { techLabor, techOutput } from './tech';
 import type { World } from './world/types';
 
 export const levelIndex = (b: Building) => Math.max(0, Math.min(2, b.level - 1));
 
 /** Reference workforce for the building at its current level. */
-export function refWorkers(b: Building): number {
+export function refWorkers(b: Building, state?: GameState): number {
   const def = BUILDING[b.type];
-  return def.refWorkers * ECON.levelWorkers[levelIndex(b)];
+  return def.refWorkers * ECON.levelWorkers[levelIndex(b)] * (state ? techLabor(state, b) : 1);
 }
 
 export function maxWorkers(b: Building): number {
@@ -25,9 +28,6 @@ export function maintenance(b: Building): number {
   return BUILDING[b.type].maintenance * ECON.levelMaintenance[levelIndex(b)];
 }
 
-export function techFactor(_state: GameState, _b: Building): number {
-  return 1;
-}
 
 /**
  * Output per day with `workers` workers, ignoring input and storage limits.
@@ -38,7 +38,7 @@ export function potentialOutput(state: GameState, b: Building, workers = b.worke
   if (!def.recipe || workers <= 0) return 0;
   const cap = def.baseRate * ECON.levelRate[levelIndex(b)];
   const skill = 1 + ECON.skillBonus * b.skill - (b.trainingLeft > 0 ? 0.1 : 0);
-  return cap * b.siteFactor * skill * techFactor(state, b) * Math.pow(workers / refWorkers(b), def.alpha);
+  return cap * b.siteFactor * skill * techOutput(state, b) * Math.pow(workers / refWorkers(b, state), def.alpha);
 }
 
 /** Extra output from one more worker (marginal product of labor). */
@@ -47,7 +47,9 @@ export function marginalProduct(state: GameState, b: Building, workers = b.worke
 }
 
 /** How suitable a site is for a building type (multiplies output). */
-export function siteFactorAt(world: World, def: BuildingDef, x: number, y: number): number {
+export function siteFactorAt(world: World, def: BuildingDef, x: number, y: number, state?: GameState): number {
+  if (state && (def.site.kind === 'forest' || def.site.kind === 'fish' || def.site.kind === 'deposit'))
+    return resourceSiteFactor(state, world, def, x, y);
   if (def.site.kind === 'fertility') {
     let sum = 0;
     let n = 0;
@@ -67,7 +69,8 @@ export function siteFactorAt(world: World, def: BuildingDef, x: number, y: numbe
 }
 
 /** Daily production for every operating building; also advances construction. */
-export function updateProduction(state: GameState): void {
+export function updateProduction(sim: Sim): void {
+  const state = sim.state;
   for (const b of state.buildings) {
     const def = BUILDING[b.type];
     if (b.buildLeft > 0) {
@@ -87,6 +90,8 @@ export function updateProduction(state: GameState): void {
     }
     const recipe = def.recipe;
     if (!recipe) continue;
+    if (def.site.kind === 'forest' || def.site.kind === 'fish' || def.site.kind === 'deposit')
+      b.siteFactor = resourceSiteFactor(state, sim.world, def, b.x, b.y);
     let out = potentialOutput(state, b);
     let status = b.workers === 0 ? 'No workers' : 'Producing';
     for (const [g, per] of Object.entries(recipe.inputs)) {
@@ -104,6 +109,13 @@ export function updateProduction(state: GameState): void {
       status = 'Storage full: output not selling';
     }
     out = Math.max(0, out);
+    if (def.site.kind === 'deposit') {
+      out = extract(sim, b, out);
+      if (b.siteFactor === 0) status = 'Deposit exhausted';
+    } else if (def.site.kind === 'forest' || def.site.kind === 'fish') {
+      harvest(sim, b, out);
+      if (b.siteFactor < 0.3) status = def.site.kind === 'forest' ? 'Forest depleted: output falling' : 'Overfished: stocks depleted';
+    }
     for (const [g, per] of Object.entries(recipe.inputs)) b.storage[g] = Math.max(0, (b.storage[g] ?? 0) - per * out);
     for (const [g, per] of Object.entries(recipe.outputs)) b.storage[g] = (b.storage[g] ?? 0) + per * out;
     b.rate = out;

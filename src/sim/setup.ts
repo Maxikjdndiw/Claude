@@ -23,6 +23,8 @@ export function newCompany(id: number, name: string, color: string, isPlayer: bo
     negativeDays: 0,
     bankrupt: false,
     hq: null,
+    techs: [],
+    research: null,
   };
 }
 
@@ -40,7 +42,9 @@ export function createGame(world: World, companyName: string): GameState {
     towns: [],
     roads: [],
     lines: [],
-    deposits: world.deposits.map((d) => ({ ...d })),
+    deposits: world.deposits.map((d) => ({ ...d, initial: d.amount })),
+    rails: [],
+    fields: { forest: {}, fish: {} },
     terrainEdits: {},
     priceLevel: 1,
     events: [],
