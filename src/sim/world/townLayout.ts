@@ -14,16 +14,21 @@ export function houseCount(population: number): number {
 }
 
 /**
- * Lay out town houses in a spiral around each town center. Deterministic, so
- * the simulation (occupancy) and renderer agree on where houses stand.
+ * Lay out town houses in a spiral around each town center, skipping blocked
+ * cells (roads, company buildings). Deterministic, so the simulation
+ * (occupancy) and the renderer agree on where houses stand.
  */
-export function layoutTowns(w: World, towns: { id: number; x: number; y: number; population: number }[]): TownLayout[] {
+export function layoutTowns(
+  w: World,
+  towns: { id: number; x: number; y: number; population: number }[],
+  blocked: (cell: number) => boolean = () => false,
+): TownLayout[] {
   const used = new Set<number>();
   const out: TownLayout[] = [];
   for (const t of towns) {
     const target = houseCount(t.population);
     const cells: number[] = [];
-    for (let r = 0; r < 16 && cells.length < target; r++) {
+    for (let r = 0; r < 18 && cells.length < target; r++) {
       for (let oy = -r; oy <= r && cells.length < target; oy++) {
         for (let ox = -r; ox <= r && cells.length < target; ox++) {
           if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
@@ -31,7 +36,7 @@ export function layoutTowns(w: World, towns: { id: number; x: number; y: number;
           const y = t.y + oy;
           if (x < 1 || y < 1 || x >= w.size - 1 || y >= w.size - 1) continue;
           const c = y * w.size + x;
-          if (used.has(c)) continue;
+          if (used.has(c) || blocked(c)) continue;
           const b = BIOME_IDS[w.biome[c]];
           if (!BIOMES[b].buildable || cellSlope(w, x, y) > 1) continue;
           // Leave gaps for streets.

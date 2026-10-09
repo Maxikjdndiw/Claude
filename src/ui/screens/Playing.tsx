@@ -6,24 +6,28 @@ import { ErrorFlash, GameOver, NewsPanel, Toasts } from '../panels/Feed';
 import { FinancePanel } from '../panels/FinancePanel';
 import { TopBar } from '../panels/TopBar';
 import { TownPanel } from '../panels/TownPanel';
+import { LineDialog, LinesPanel, ToolHint } from '../panels/Transport';
 
 /** In-game HUD. */
 export function Playing({ game }: { game: Game }) {
   const left = useStore(game.ui, (s) => s.leftPanel);
   const selB = useStore(game.ui, (s) => s.selectedBuilding);
   const selT = useStore(game.ui, (s) => s.selectedTown);
-  const building = useStore(game.ui, (s) => s.buildType);
+  const building = useStore(game.ui, (s) => s.buildType || s.tool);
   return (
     <>
       <TopBar game={game} />
       {left === 'finance' && <FinancePanel game={game} />}
       {left === 'log' && <NewsPanel game={game} />}
+      {left === 'lines' && <LinesPanel game={game} />}
+      <ToolHint game={game} />
       {building && <PlacementHint game={game} />}
       {!building && selB !== null && <BuildingPanel game={game} />}
       {!building && selB === null && selT !== null && <TownPanel game={game} />}
       <BuildMenu game={game} />
       <Toasts game={game} />
       <ErrorFlash game={game} />
+      <LineDialog game={game} />
       <GameOver game={game} />
     </>
   );

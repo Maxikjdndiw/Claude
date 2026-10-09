@@ -762,3 +762,22 @@ input[type='range'] {
 .tbl td:first-child {
   white-space: nowrap;
 }
+.dock-sep {
+  width: 1px;
+  background: var(--line);
+  margin: 6px 4px;
+}
+.dock-item.tool {
+  min-width: 140px;
+}
+.modal.left-align {
+  text-align: left;
+  width: 440px;
+}
+.line-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: rgba(255, 255, 255, 0.6);
+}

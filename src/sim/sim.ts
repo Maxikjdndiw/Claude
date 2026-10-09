@@ -9,6 +9,8 @@ import { closeMarketMonth, updateMarkets } from './market';
 import { closeMonth, updateFinance } from './finance';
 import { isMonthStart } from './time';
 import { applyTerrainEdits, type Rect } from './terrainEdit';
+import { closeLinesMonth, updateTransport } from './transport';
+import { updateTowns } from './towns';
 
 /** Simulation context: static world + mutable state + derived caches. */
 export class Sim {
@@ -16,6 +18,8 @@ export class Sim {
   readonly rng: SimRng;
   /** Terrain regions changed since the renderer last looked (rendering hint). */
   terrainDirty: Rect[] = [];
+  roadsDirty = true;
+  townsDirty = true;
 
   constructor(
     readonly world: World,
@@ -34,12 +38,18 @@ export class Sim {
     updateLabor(s, this.rng);
     updateProduction(s);
     updateLocalLogistics(s);
+    updateTransport(s);
     updateMarkets(s);
     updateFinance(s);
     s.day++;
     if (isMonthStart(s.day)) {
       closeMonth(s);
       closeMarketMonth(s);
+      closeLinesMonth(s);
+      if (updateTowns(s)) {
+        this.occ.rebuild(s);
+        this.townsDirty = true;
+      }
     }
     s.rng = this.rng.state;
   }

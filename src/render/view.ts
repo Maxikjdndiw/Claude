@@ -7,6 +7,8 @@ import { PALETTE } from './palette';
 import { PropsView } from './props';
 import { TerrainView } from './terrain';
 import { TownsView } from './towns';
+import { RoadsView } from './roads';
+import { VehiclesView } from './vehicles';
 import { WaterView } from './water';
 
 export interface Pick {
@@ -29,6 +31,8 @@ export class View {
   water: WaterView | null = null;
   props: PropsView | null = null;
   towns: TownsView | null = null;
+  roads: RoadsView | null = null;
+  vehicles: VehiclesView | null = null;
   overlays: OverlayView | null = null;
   /** Everything on the map lives here, in grid coordinates (1 unit = 1 cell). */
   readonly mapRoot = new THREE.Group();
@@ -87,8 +91,18 @@ export class View {
     this.water = new WaterView(world);
     this.props = new PropsView(world);
     this.towns = new TownsView(world);
+    this.roads = new RoadsView(world);
+    this.vehicles = new VehiclesView(world);
     this.overlays = new OverlayView(world);
-    this.mapRoot.add(this.terrain.group, this.water.group, this.props.group, this.towns.group, this.overlays.group);
+    this.mapRoot.add(
+      this.terrain.group,
+      this.water.group,
+      this.props.group,
+      this.towns.group,
+      this.roads.group,
+      this.vehicles.group,
+      this.overlays.group,
+    );
 
     const s = world.size;
     const shadowCam = this.sun.shadow.camera;
@@ -121,9 +135,14 @@ export class View {
     }
   }
 
-  updateTownLabel(index: number, html: string): void {
-    const l = this.labels[index];
-    if (l) l.el.innerHTML = html;
+  /** Refresh label text (population changes). */
+  updateTownLabels(towns: { name: string; population: number }[]): void {
+    towns.forEach((t, i) => {
+      const l = this.labels[i];
+      if (!l) return;
+      const html = `<b>${t.name}</b><span>${formatPop(t.population)}</span>`;
+      if (l.el.innerHTML !== html) l.el.innerHTML = html;
+    });
   }
 
   set labelsVisible(v: boolean) {

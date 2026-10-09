@@ -4,6 +4,7 @@ import { book } from './finance';
 import { buyFromMarket, refPrice, sellToMarket } from './market';
 import { potentialOutput } from './production';
 import type { Building, GameState, Town } from './state';
+import { hasOutgoingLine } from './transport';
 
 export function center(b: Building): { x: number; y: number } {
   const [w, h] = BUILDING[b.type].footprint;
@@ -92,7 +93,7 @@ export function updateLocalLogistics(state: GameState): void {
     const company = state.companies[b.owner];
     for (const g of Object.keys(recipe.outputs)) {
       const q = b.storage[g] ?? 0;
-      if (q < 0.01) continue;
+      if (q < 0.01 || hasOutgoingLine(state, b, g)) continue;
       const towns = localTowns(state, b);
       if (!towns.length) continue;
       // Best net price after haulage.

@@ -6,16 +6,19 @@ import { View } from './render/view';
 import * as cmd from './sim/commands';
 import { TOWN_CELL } from './sim/grid';
 import { hashString } from './sim/rng';
-import { createGame } from './sim/setup';
+import { startNewGame } from './sim/setup';
 import { Sim } from './sim/sim';
-import type { GameEvent, GameState } from './sim/state';
+import type { Endpoint, GameEvent, GameState } from './sim/state';
+import { buildRoad, planRoad, type RoadPlan } from './sim/roads';
+import { layoutTowns } from './sim/world/townLayout';
 import { generateWorld } from './sim/world/generate';
 import { analyzeSite, biomeOf, heightAt, type SiteAnalysis } from './sim/world/query';
 import type { World } from './sim/world/types';
 import { Store } from './ui/store';
 
 export type Screen = 'menu' | 'pickStart' | 'playing';
-export type LeftPanel = null | 'finance' | 'log';
+export type LeftPanel = null | 'finance' | 'log' | 'lines';
+export type Tool = null | 'road' | 'line';
 
 export const START_RADIUS = 14;
 /** Real seconds per simulated day at 1x speed. */
@@ -49,6 +52,11 @@ export interface UIState {
   leftPanel: LeftPanel;
   toasts: Toast[];
   error: string | null;
+  tool: Tool;
+  roadStart: number | null;
+  roadPlan: RoadPlan | null;
+  lineFrom: Endpoint | null;
+  lineDraft: { from: Endpoint; to: Endpoint } | null;
 }
 
 /** Turns a free-text seed into a number ("42" -> 42, "harbor" -> hash). */
@@ -93,10 +101,18 @@ export class Game {
       leftPanel: null,
       toasts: [],
       error: null,
+      tool: null,
+      roadStart: null,
+      roadPlan: null,
+      lineFrom: null,
+      lineDraft: null,
     });
     this.view.rig.onClick = (e) => this.onMapClick(e);
     this.view.dom.addEventListener('pointermove', (e) => this.onMapHover(e));
-    this.view.dom.addEventListener('contextmenu', () => this.cancelBuild());
+    this.view.dom.addEventListener('contextmenu', () => {
+      this.cancelBuild();
+      if (this.ui.state.tool) this.setTool(null);
+    });
     this.view.onFrame = (dt) => this.frame(dt);
     window.addEventListener('keydown', (e) => this.onKey(e));
     this.loadMenuBackdrop();
@@ -123,6 +139,7 @@ export class Game {
     this.view.setWorld(world);
     this.buildingsView = new BuildingsView(world);
     this.view.mapRoot.add(this.buildingsView.group);
+    this.view.towns!.rebuild(world.towns, layoutTowns(world, world.towns));
   }
 
   previewSeed(seedText: string): void {
@@ -137,8 +154,8 @@ export class Game {
     const seed = parseSeed(seedText);
     // Always regenerate: the previous game may have edited the terrain.
     this.setWorld(generateWorld(seed));
-    const state = createGame(this.world!, companyName.trim() || 'Evergreen Industries');
-    this.sim = new Sim(this.world!, state);
+    this.sim = startNewGame(this.world!, companyName.trim() || 'Evergreen Industries');
+    const state = this.sim.state;
     const v = this.view;
     v.rig.autoRotate = 0;
     v.rig.enabled = true;
@@ -147,6 +164,7 @@ export class Game {
     v.overlays!.setDeposits(state.deposits);
     v.overlays!.markersVisible = this.ui.state.showResources;
     v.labelsVisible = true;
+    this.afterChange();
     this.ui.set({ screen: 'pickStart', seedText, companyName, hover: null, selected: null });
   }
 
@@ -221,6 +239,7 @@ export class Game {
   private frame(dt: number): void {
     const s = this.ui.state;
     this.buildingsView?.update(dt, s.speed);
+    if (this.sim) this.view.vehicles?.update(this.sim.state, Math.min(1, this.acc), this.sim.state.companies.map((c) => c.color));
     if (s.screen !== 'playing' || !this.sim || s.speed === 0 || this.sim.state.gameOver) return;
     this.acc += (dt * s.speed) / DAY_SECONDS;
     let steps = 0;
@@ -255,6 +274,15 @@ export class Game {
       }
       sim.terrainDirty = [];
     }
+    if (sim.roadsDirty) {
+      v.roads?.rebuild(sim.state.roads);
+      sim.roadsDirty = false;
+    }
+    if (sim.townsDirty) {
+      v.towns?.rebuild(sim.state.towns, sim.occ.layouts);
+      sim.townsDirty = false;
+    }
+    v.updateTownLabels(sim.state.towns);
     this.buildingsView?.sync(
       sim.state,
       sim.state.companies.map((c) => c.color),
@@ -289,7 +317,8 @@ export class Game {
     this.ghost = BuildingsView.ghost(BUILDING[type]);
     this.ghost.visible = false;
     this.view.mapRoot.add(this.ghost);
-    this.ui.set({ buildType: type, placement: null, selectedBuilding: null, selectedTown: null });
+    this.view.roads?.showPreview(null);
+    this.ui.set({ buildType: type, placement: null, selectedBuilding: null, selectedTown: null, tool: null, roadStart: null, lineFrom: null });
     this.afterChange();
   }
 
@@ -334,6 +363,84 @@ export class Game {
     this.ui.set({ selectedBuilding: res.building!.id });
     this.afterChange();
     return true;
+  }
+
+  // ---------------------------------------------------------------- transport tools
+
+  setTool(tool: Tool): void {
+    this.cancelBuild();
+    this.view.roads?.showPreview(null);
+    this.view.overlays!.cursor.visible = false;
+    this.ui.set({
+      tool: this.ui.state.tool === tool ? null : tool,
+      roadStart: null,
+      roadPlan: null,
+      lineFrom: null,
+      selectedBuilding: null,
+      selectedTown: null,
+    });
+    this.afterChange();
+  }
+
+  /** What a click on this cell means as a line endpoint. */
+  endpointAt(cx: number, cy: number): Endpoint | null {
+    const sim = this.sim!;
+    const o = sim.occ.at(cx, cy);
+    if (o > 0) {
+      const b = sim.state.buildings.find((x) => x.id === o);
+      if (b && b.owner === 0 && b.type !== 'hq') return { kind: 'building', id: b.id };
+      return null;
+    }
+    for (const t of sim.state.towns) {
+      if (Math.hypot(t.x - cx, t.y - cy) <= (sim.occ.townRadius[t.id] ?? 4)) return { kind: 'town', id: t.id };
+    }
+    return null;
+  }
+
+  private roadClick(cell: number): void {
+    const sim = this.sim!;
+    const start = this.ui.state.roadStart;
+    if (start === null) {
+      this.ui.set({ roadStart: cell });
+      return;
+    }
+    const plan = planRoad(sim, start, cell);
+    const res = buildRoad(sim, 0, start, cell);
+    if (!res.ok) {
+      this.flashError(res.reason ?? 'Cannot build this road');
+      return;
+    }
+    this.view.roads?.showPreview(null);
+    // Chain: the next road starts where this one ended.
+    this.ui.set({ roadStart: plan ? plan.path[plan.path.length - 1] : null, roadPlan: null });
+    this.afterChange();
+  }
+
+  private roadHover(cell: number): void {
+    const start = this.ui.state.roadStart;
+    const size = this.sim!.world.size;
+    this.view.overlays!.placeCursor((cell % size) + 0.5, ((cell / size) | 0) + 0.5, 0.8, true);
+    if (start === null) return;
+    const prev = this.ui.state.roadPlan;
+    if (prev && prev.path[prev.path.length - 1] === cell) return;
+    const plan = planRoad(this.sim!, start, cell);
+    this.view.roads?.showPreview(plan ? plan.path : null);
+    this.ui.set({ roadPlan: plan });
+  }
+
+  private lineClick(cx: number, cy: number): void {
+    const e = this.endpointAt(cx, cy);
+    if (!e) {
+      this.flashError('Click one of your buildings or a town');
+      return;
+    }
+    const from = this.ui.state.lineFrom;
+    if (!from) this.ui.set({ lineFrom: e });
+    else this.ui.set({ lineDraft: { from, to: e }, lineFrom: null, tool: null });
+  }
+
+  closeLineDraft(): void {
+    this.ui.set({ lineDraft: null });
   }
 
   // ---------------------------------------------------------------- commands for the UI
@@ -394,6 +501,9 @@ export class Game {
     } else if (screen === 'playing' && this.ui.state.buildType) {
       const p = this.view.pick(e.clientX, e.clientY);
       if (p) this.updatePlacement(p.gx, p.gy);
+    } else if (screen === 'playing' && this.ui.state.tool === 'road') {
+      const p = this.view.pick(e.clientX, e.clientY);
+      if (p) this.roadHover(p.cy * this.world.size + p.cx);
     }
   }
 
@@ -411,6 +521,14 @@ export class Game {
     if (this.ui.state.buildType) {
       this.updatePlacement(p.gx, p.gy);
       this.tryBuild();
+      return;
+    }
+    if (this.ui.state.tool === 'road') {
+      this.roadClick(p.cy * this.world.size + p.cx);
+      return;
+    }
+    if (this.ui.state.tool === 'line') {
+      this.lineClick(p.cx, p.cy);
       return;
     }
     const o = this.sim.occ.at(p.cx, p.cy);
@@ -439,7 +557,8 @@ export class Game {
     if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
     if (this.ui.state.screen !== 'playing') return;
     if (e.key === 'Escape') {
-      if (this.ui.state.buildType) this.cancelBuild();
+      if (this.ui.state.tool) this.setTool(null);
+      else if (this.ui.state.buildType) this.cancelBuild();
       else this.ui.set({ selectedBuilding: null, selectedTown: null, leftPanel: null });
       this.afterChange();
     } else if (e.key === ' ') {

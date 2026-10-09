@@ -1,6 +1,6 @@
 import type { DepositSeed } from './world/types';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export const LEDGER_CATS = [
   'sales',
@@ -119,6 +119,47 @@ export interface Town {
   market: Record<string, MarketState>;
 }
 
+export interface Endpoint {
+  kind: 'building' | 'town';
+  id: number;
+}
+
+export interface Vehicle {
+  /** Distance travelled along the path from the line's start (km). */
+  pos: number;
+  /** +1 heading to the destination, -1 heading back. */
+  dir: 1 | -1;
+  cargo: number;
+  /** Paid for the current cargo (when bought in a town), for per-line accounting. */
+  cargoCost: number;
+  idle: boolean;
+}
+
+/** A transport line: vehicles shuttle one good from `from` to `to`. */
+export interface Line {
+  id: number;
+  owner: number;
+  vehicle: string;
+  from: Endpoint;
+  to: Endpoint;
+  good: string;
+  /** Road cells from the source access point to the destination. */
+  path: number[];
+  length: number;
+  vehicles: Vehicle[];
+  invested: number;
+  bookValue: number;
+  status: string;
+  month: LineStats;
+  last: LineStats;
+}
+
+export interface LineStats {
+  revenue: number;
+  costs: number;
+  delivered: number;
+}
+
 export type EventKind = 'info' | 'good' | 'bad';
 
 export interface GameEvent {
@@ -144,6 +185,9 @@ export interface GameState {
   companies: Company[];
   buildings: Building[];
   towns: Town[];
+  /** Road cells (shared infrastructure). */
+  roads: number[];
+  lines: Line[];
   deposits: DepositSeed[];
   /** Terrain height overrides (vertex index -> height): flattened pads, mine pits. */
   terrainEdits: Record<number, number>;
@@ -162,3 +206,4 @@ export const emptyLedger = (): Ledger =>
   Object.fromEntries(LEDGER_CATS.map((c) => [c, 0])) as Ledger;
 
 export const emptyStats = (): BuildingStats => ({ revenue: 0, costs: 0, produced: 0 });
+export const emptyLineStats = (): LineStats => ({ revenue: 0, costs: 0, delivered: 0 });

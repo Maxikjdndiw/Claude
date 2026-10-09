@@ -5,6 +5,8 @@ import { marketWage } from './labor';
 import { mulberry32 } from './rng';
 import { emptyLedger, SAVE_VERSION, type Company, type GameState, type Town } from './state';
 import type { World } from './world/types';
+import { Sim } from './sim';
+import { generateCountryRoads } from './roads';
 
 export const PLAYER_COLOR = '#2f7f8f';
 
@@ -36,6 +38,8 @@ export function createGame(world: World, companyName: string): GameState {
     companies: [newCompany(0, companyName, PLAYER_COLOR, true, ECON.startCash)],
     buildings: [],
     towns: [],
+    roads: [],
+    lines: [],
     deposits: world.deposits.map((d) => ({ ...d })),
     terrainEdits: {},
     priceLevel: 1,
@@ -64,4 +68,12 @@ export function createGame(world: World, companyName: string): GameState {
     state.towns.push(town);
   }
   return state;
+}
+
+/** Create the state and simulation for a new game, including country roads between towns. */
+export function startNewGame(world: World, companyName: string): Sim {
+  const sim = new Sim(world, createGame(world, companyName));
+  generateCountryRoads(sim);
+  sim.occ.rebuild(sim.state);
+  return sim;
 }

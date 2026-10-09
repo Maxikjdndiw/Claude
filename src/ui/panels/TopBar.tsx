@@ -54,6 +54,9 @@ export function TopBar({ game }: { game: Game }) {
       <button class={cls('btn small', left === 'finance' && 'on')} onClick={() => game.setLeftPanel('finance')}>
         $ Finances
       </button>
+      <button class={cls('btn small', left === 'lines' && 'on')} onClick={() => game.setLeftPanel('lines')}>
+        🚚 Lines
+      </button>
       <button class={cls('btn small', left === 'log' && 'on')} onClick={() => game.setLeftPanel('log')}>
         ☰ News
       </button>

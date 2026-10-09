@@ -74,6 +74,7 @@ export function inventoryValue(state: GameState, owner: number): number {
 export function companyAssets(state: GameState, c: Company): number {
   let book = 0;
   for (const b of state.buildings) if (b.owner === c.id) book += b.bookValue;
+  for (const l of state.lines) if (l.owner === c.id) book += l.bookValue;
   return c.cash + book + inventoryValue(state, c.id);
 }
 

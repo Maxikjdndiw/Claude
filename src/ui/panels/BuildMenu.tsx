@@ -16,9 +16,21 @@ function recipeText(id: string): string {
 export function BuildMenu({ game }: { game: Game }) {
   const active = useStore(game.ui, (s) => s.buildType);
   useStore(game.ui, (s) => s.tick);
+  const tool = useStore(game.ui, (s) => s.tool);
   const cash = game.state!.companies[0].cash;
   return (
     <nav class="dock panel">
+      <button class={cls('dock-item tool', tool === 'road' && 'on')} onClick={() => game.setTool('road')} title="Build roads (click start, then end)">
+        <b>🛣 Road</b>
+        <span class="muted">Connect buildings and towns</span>
+        <span class="cost">{money(260)}/km</span>
+      </button>
+      <button class={cls('dock-item tool', tool === 'line' && 'on')} onClick={() => game.setTool('line')} title="Create a truck line between two places">
+        <b>🚚 Truck line</b>
+        <span class="muted">Ship goods by road</span>
+        <span class="cost">{money(6000)}/truck</span>
+      </button>
+      <div class="dock-sep" />
       {BUILDINGS.filter((b) => !b.hidden).map((b) => (
         <button
           key={b.id}

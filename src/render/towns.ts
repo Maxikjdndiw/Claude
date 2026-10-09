@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { hash2 } from '../sim/rng';
-import { layoutTowns } from '../sim/world/townLayout';
+import type { TownLayout } from '../sim/world/townLayout';
 import { heightAt } from '../sim/world/query';
 import type { World } from '../sim/world/types';
 import { buildModel, propMaterial } from './meshkit';
@@ -30,11 +30,9 @@ export class TownsView {
   private roofs!: THREE.InstancedMesh;
   private towers!: THREE.InstancedMesh;
 
-  constructor(private world: World) {
-    this.rebuild(world.towns);
-  }
+  constructor(private world: World) {}
 
-  rebuild(towns: { id: number; x: number; y: number; population: number }[]): void {
+  rebuild(towns: { id: number; x: number; y: number; population: number }[], layouts: TownLayout[]): void {
     this.group.clear();
     const w = this.world;
     const houseM: THREE.Matrix4[] = [];
@@ -44,7 +42,6 @@ export class TownsView {
     const towerM: THREE.Matrix4[] = [];
     const towerC: THREE.Color[] = [];
 
-    const layouts = layoutTowns(w, towns);
     for (const t of towns) {
       const cells = layouts.find((l) => l.town === t.id)!.cells;
       const target = cells.length;
