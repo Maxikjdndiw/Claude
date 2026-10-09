@@ -52,7 +52,9 @@ export function TopBar({ game }: { game: Game }) {
       <button class="eco-badge" title="Economy: business cycle, inflation and interest rates" onClick={() => game.setLeftPanel('economy')}>
         <span>{st.macro.phase === 'boom' ? '📈' : st.macro.phase === 'recession' ? '📉' : '➖'}</span>
         <small>
-          rate {(st.macro.baseRate * 100).toFixed(2)}% · infl. {(st.macro.inflation * 100).toFixed(1)}%
+          <span class="lbl">rate </span>
+          {(st.macro.baseRate * 100).toFixed(2)}% · <span class="lbl">infl. </span>
+          {(st.macro.inflation * 100).toFixed(1)}%
         </small>
       </button>
       <div class="speed">
@@ -93,8 +95,8 @@ export function TopBar({ game }: { game: Game }) {
       <button title="Show resource deposits" class={cls('btn small', showRes && 'on')} onClick={() => game.toggleResources()}>
         💎<span class="lbl"> Resources</span>
       </button>
-      <button class="btn small ghost" onClick={() => game.backToMenu()}>
-        Menu
+      <button class="btn small ghost" title="Menu: save, load, achievements (Esc)" onClick={() => game.setMenu(true)}>
+        ☰ Menu
       </button>
     </header>
   );

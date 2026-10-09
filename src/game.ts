@@ -6,7 +6,10 @@ import { View } from './render/view';
 import * as cmd from './sim/commands';
 import { TOWN_CELL } from './sim/grid';
 import { hashString } from './sim/rng';
-import { startNewGame } from './sim/setup';
+import { applyScenario, startNewGame } from './sim/setup';
+import { SCENARIO } from './data/scenarios';
+import { loadState, saveGame } from './save';
+import { isMonthStart } from './sim/time';
 import { Sim } from './sim/sim';
 import type { Endpoint, GameEvent, GameState } from './sim/state';
 import { buildRoad, planRoad, type RoadPlan, type TrackMode } from './sim/roads';
@@ -66,6 +69,11 @@ export interface UIState {
   /** Show economics pop-ups. */
   tips: boolean;
   glossaryFocus: string | null;
+  menuOpen: boolean;
+  /** Current tutorial step, or null when not in the tutorial. */
+  tutorial: number | null;
+  /** Achievements unlocked in any game (persisted in the browser). */
+  trophies: string[];
 }
 
 /** Turns a free-text seed into a number ("42" -> 42, "harbor" -> hash). */
@@ -77,6 +85,14 @@ export function parseSeed(text: string): number {
 
 export function randomSeedText(): string {
   return String(Math.floor(Math.random() * 1e6));
+}
+
+function loadTrophies(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem('tycoon.achievements') ?? '[]');
+  } catch {
+    return [];
+  }
 }
 
 function loadTips(): boolean {
@@ -100,6 +116,7 @@ export class Game {
   private toastId = 0;
   private lastSpeed = 1;
   private prevForest = new Set<number>();
+  private lastAutosave = -1;
 
   constructor(viewport: HTMLElement) {
     this.view = new View(viewport);
@@ -126,6 +143,9 @@ export class Game {
       lineDraft: null,
       tips: loadTips(),
       glossaryFocus: null,
+      menuOpen: false,
+      tutorial: null,
+      trophies: loadTrophies(),
     });
     this.view.rig.onClick = (e) => this.onMapClick(e);
     this.view.dom.addEventListener('pointermove', (e) => this.onMapHover(e));
@@ -170,11 +190,17 @@ export class Game {
   }
 
   /** Main menu -> pick a start location on the generated map. */
-  newGame(seedText: string, companyName: string, difficulty: Difficulty = 'normal'): void {
+  newGame(seedText: string, companyName: string, difficulty: Difficulty = 'normal', scenario?: string): void {
+    const sc = scenario ? SCENARIO[scenario] : undefined;
+    if (sc) {
+      seedText = sc.seed;
+      difficulty = sc.difficulty;
+    }
     const seed = parseSeed(seedText);
     // Always regenerate: the previous game may have edited the terrain.
     this.setWorld(generateWorld(seed));
     this.sim = startNewGame(this.world!, companyName.trim() || 'Evergreen Industries', difficulty);
+    if (sc) applyScenario(this.sim, sc.id);
     const state = this.sim.state;
     const v = this.view;
     v.rig.autoRotate = 0;
@@ -236,6 +262,8 @@ export class Game {
     this.view.overlays!.selection.visible = false;
     this.ui.set({
       screen: 'menu',
+      menuOpen: false,
+      tutorial: null,
       hover: null,
       selected: null,
       selectedBuilding: null,
@@ -244,6 +272,65 @@ export class Game {
       toasts: [],
     });
     this.loadMenuBackdrop();
+  }
+
+  saveTo(slot: string): void {
+    if (!this.sim) return;
+    const res = saveGame(slot, this.sim.state);
+    if (res.ok) this.ui.set({ toasts: [...this.ui.state.toasts, { day: this.sim.state.day, kind: 'good', text: `Game saved${slot === 'auto' ? '' : ` to slot ${slot}`}.`, id: ++this.toastId, born: performance.now() }] });
+    else this.flashError(res.reason ?? 'Could not save');
+  }
+
+  loadFrom(slot: string): boolean {
+    const { state, reason } = loadState(slot);
+    if (!state) {
+      this.flashError(reason ?? 'Could not load');
+      return false;
+    }
+    this.cancelBuild();
+    const world = generateWorld(state.seed);
+    this.sim = new Sim(world, state); // re-applies terrain edits
+    this.setWorld(world);
+    const v = this.view;
+    v.rig.autoRotate = 0;
+    v.rig.enabled = true;
+    v.overlays!.setDeposits(state.deposits);
+    v.overlays!.markersVisible = this.ui.state.showResources;
+    v.labelsVisible = true;
+    this.prevForest = new Set();
+    this.markPits();
+    v.terrain?.updateRegion(0, 0, world.size, world.size);
+    for (const b of state.buildings) {
+      const [w, h] = BUILDING[b.type].footprint;
+      const cells: number[] = [];
+      for (let y = b.y - 1; y <= b.y + h; y++) for (let x = b.x - 1; x <= b.x + w; x++) cells.push(y * world.size + x);
+      v.props?.clearCells(cells);
+    }
+    const hq = state.companies[0].hq ?? { x: world.size / 2, y: world.size / 2 };
+    v.rig.focus(hq.x + 1, hq.y + 1, 60, true);
+    v.rig.setView(0.6, 0.85, 60, true);
+    this.lastAutosave = state.day;
+    this.ui.set({ screen: 'playing', speed: 0, menuOpen: false, selectedBuilding: null, selectedTown: null, leftPanel: null, toasts: [], companyName: state.companies[0].name });
+    this.afterChange();
+    return true;
+  }
+
+  startTutorial(companyName: string): void {
+    this.newGame('42', companyName, 'easy');
+    this.ui.set({ tutorial: 0, tips: true });
+  }
+
+  /** Keep playing after a scenario ended (win or loss). */
+  continueAfterScenario(): void {
+    if (!this.sim) return;
+    this.sim.state.gameOver = null;
+    this.sim.state.scenario = undefined;
+    this.afterChange();
+  }
+
+  setMenu(open: boolean): void {
+    if (open) this.setSpeed(0);
+    this.ui.set({ menuOpen: open });
   }
 
   toggleResources(): void {
@@ -336,6 +423,20 @@ export class Game {
     if (events.length) {
       const now = performance.now();
       toasts = [...toasts, ...events.map((e) => ({ ...e, id: ++this.toastId, born: now }))].slice(-5);
+    }
+    if (isMonthStart(sim.state.day) && sim.state.day !== this.lastAutosave && this.ui.state.screen === 'playing' && !sim.state.gameOver) {
+      this.lastAutosave = sim.state.day;
+      saveGame('auto', sim.state);
+    }
+    let trophies = this.ui.state.trophies;
+    if (sim.state.achievements.some((a) => !trophies.includes(a))) {
+      trophies = [...new Set([...trophies, ...sim.state.achievements])];
+      try {
+        localStorage.setItem('tycoon.achievements', JSON.stringify(trophies));
+      } catch {
+        /* storage unavailable */
+      }
+      this.ui.set({ trophies });
     }
     const speed = sim.state.gameOver ? 0 : this.ui.state.speed;
     this.ui.set({ tick: this.ui.state.tick + 1, toasts, speed, selectedBuilding: b ? b.id : null });
@@ -646,8 +747,10 @@ export class Game {
     if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
     if (this.ui.state.screen !== 'playing') return;
     if (e.key === 'Escape') {
-      if (this.ui.state.tool) this.setTool(null);
+      if (this.ui.state.menuOpen) this.setMenu(false);
+      else if (this.ui.state.tool) this.setTool(null);
       else if (this.ui.state.buildType) this.cancelBuild();
+      else if (this.ui.state.selectedBuilding === null && this.ui.state.selectedTown === null && !this.ui.state.leftPanel) this.setMenu(true);
       else this.ui.set({ selectedBuilding: null, selectedTown: null, leftPanel: null });
       this.afterChange();
     } else if (e.key === ' ') {

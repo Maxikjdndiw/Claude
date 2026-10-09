@@ -3,6 +3,7 @@ import type { Game } from '../../game';
 import type { SiteAnalysis } from '../../sim/world/query';
 import { useStore } from '../store';
 import { formatPop } from '../../render/view';
+import { TutorialCard } from '../panels/Tutorial';
 
 function Meter({ value, color }: { value: number; color: string }) {
   return (
@@ -81,6 +82,7 @@ export function StartPicker({ game }: { game: Game }) {
 
   return (
     <>
+      <TutorialCard game={game} />
       <div class="banner panel">
         <b>Choose your starting location</b>
         <span class="muted">

@@ -58,12 +58,20 @@ export function GameOver({ game }: { game: Game }) {
   useStore(game.ui, (s) => s.tick);
   const go = game.state?.gameOver;
   if (!go) return null;
+  const scenario = !!game.state?.scenario;
+  const canContinue = scenario && !game.state!.companies[0].bankrupt && game.state!.companies[0].acquiredBy === undefined;
   return (
     <div class="modal-back">
       <div class="modal panel">
-        <h1>Game over</h1>
+        <div class="big-icon">{go.won ? '🏆' : '📉'}</div>
+        <h1>{go.won ? 'Scenario complete!' : scenario ? 'Scenario failed' : 'Game over'}</h1>
         <p>{go.reason}</p>
         <p class="muted">{formatDate(go.day)}</p>
+        {canContinue && (
+          <button class="btn big" style={{ marginBottom: '8px' }} onClick={() => game.continueAfterScenario()}>
+            Keep playing in free mode
+          </button>
+        )}
         <button class="btn primary big" onClick={() => game.backToMenu()}>
           Back to menu
         </button>

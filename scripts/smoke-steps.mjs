@@ -186,9 +186,48 @@ export default async function steps(page, out) {
   await page.evaluate(() => window.game.setLeftPanel('learn'));
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${out}/15-glossary.png` });
+  // Milestone 8: save, load, pause menu, scenarios, tutorial.
+  const loaded = await page.evaluate(() => {
+    const g = window.game;
+    g.setLeftPanel(null);
+    const before = { day: g.state.day, cash: Math.round(g.state.companies[0].cash), buildings: g.state.buildings.length };
+    g.saveTo('1');
+    const ok = g.loadFrom('1');
+    const after = { day: g.state.day, cash: Math.round(g.state.companies[0].cash), buildings: g.state.buildings.length };
+    return { ok, same: JSON.stringify(before) === JSON.stringify(after), before, after };
+  });
+  if (!loaded.ok || !loaded.same) throw new Error('save/load mismatch ' + JSON.stringify(loaded));
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${out}/16-loaded.png` });
+  await page.evaluate(() => window.game.setMenu(true));
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${out}/17-pause-menu.png` });
   const summary = await page.evaluate(() => {
     const s = window.game.state;
     return { day: s.day, cash: Math.round(s.companies[0].cash), buildings: s.buildings.filter((b) => b.owner === 0).map((b) => [b.type, b.workers, b.status]), rivals: s.companies.map((c) => [c.name, Math.round(c.cash), s.buildings.filter((b) => b.owner === c.id).length, c.bankrupt]), lines: s.lines.map((l) => [l.status, l.length, l.last]), learned: Object.keys(s.learning.seen), mineDep: window.__mineDep && [window.__mineDep.amount, window.__mineDep.initial, window.__mineDep.pitDepth, window.__mineDep.pitBase, window.game.world.heights[window.__mineDep.y * window.game.world.n + window.__mineDep.x], window.game.view.terrain.world === window.game.sim.world, Object.keys(s.terrainEdits).length, window.__mineDep.x, window.__mineDep.y, (() => { const d = window.__mineDep; let best = 99; for (const m of window.game.view.terrain.meshes) { const p = m.geometry.attributes.position.array; for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i] - d.x) < 1 && Math.abs(p[i + 2] - d.y) < 1) best = Math.min(best, p[i + 1]); } return best; })(), Array.from(window.game.view.terrain.dug).filter(Boolean).length] };
   });
   console.log(JSON.stringify(summary));
+
+  await page.evaluate(() => window.game.backToMenu());
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => [...document.querySelectorAll('.tab')].find((b) => b.textContent.includes('Scenarios')).click());
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${out}/18-scenarios.png` });
+  await page.evaluate(() => window.game.newGame('', 'Scenario Co', 'normal', 'storm'));
+  await page.waitForTimeout(800);
+  await page.evaluate(() => {
+    const g = window.game;
+    g.debugSelectStart(g.world.towns[0].x + 6, g.world.towns[0].y + 3);
+    g.confirmStart();
+    g.advance(40);
+  });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/19-scenario.png` });
+  await page.evaluate(() => {
+    const g = window.game;
+    g.backToMenu();
+    g.startTutorial('Tutorial Co');
+  });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/20-tutorial.png` });
 }

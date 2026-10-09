@@ -2,7 +2,7 @@ import type { DepositSeed } from './world/types';
 import type { Difficulty, Personality } from '../data/ai';
 import type { Category } from '../data/buildings';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 export const LEDGER_CATS = [
   'sales',
@@ -289,7 +289,11 @@ export interface GameState {
   events: GameEvent[];
   /** Log of recent notable events (kept short). */
   log: GameEvent[];
-  gameOver: null | { reason: string; day: number };
+  gameOver: null | { reason: string; day: number; won?: boolean };
+  scenario?: { id: string; deadline: number; streak: number; result?: 'won' | 'lost' };
+  achievements: string[];
+  /** Flags used by achievement checks. */
+  flags: Record<string, boolean>;
   settings: { difficulty: Difficulty; bots: number };
   /** Learning layer: concepts encountered (with the live example) and pending pop-ups. */
   learning: { seen: Record<string, { day: number; example: string }>; queue: { concept: string; example: string }[] };

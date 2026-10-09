@@ -12,6 +12,7 @@ import { cellSlope } from './world/generate';
 import { flattenFootprint } from './terrainEdit';
 import { depositFor, isCoastal } from './resources';
 import { canBuildType } from './tech';
+import { deleteLine } from './transport';
 import { RESOURCES } from '../data/resources';
 
 export interface Result {
@@ -253,6 +254,9 @@ export function demolish(sim: Sim, owner: number, id: number): Result {
   // Writing off the remaining book value is a (non-cash) loss.
   c.month.depreciation += b.bookValue - salvage;
   if (b.town >= 0) state.towns[b.town].unemployed += b.workers;
+  // Lines serving this building lose an endpoint: sell their vehicles.
+  for (const l of state.lines.filter((x) => (x.from.kind === 'building' && x.from.id === b.id) || (x.to.kind === 'building' && x.to.id === b.id)))
+    deleteLine(sim, l.owner, l.id);
   state.buildings = state.buildings.filter((x) => x !== b);
   sim.occ.clear(b.id);
   emit(state, 'info', `Demolished your ${BUILDING[b.type].name}. Salvage: $${Math.round(salvage).toLocaleString()}.`, {

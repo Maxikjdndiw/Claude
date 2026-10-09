@@ -19,7 +19,7 @@ const NEUTRAL_REAL_RATE = 0.015;
 
 /** Effects of all currently active events. */
 export function activeEffects(state: GameState): EventEffect[] {
-  return state.activeEvents.flatMap((e) => EVENT[e.id]?.effects ?? []);
+  return state.activeEvents.filter((e) => e.start <= state.day).flatMap((e) => EVENT[e.id]?.effects ?? []);
 }
 
 export function supplyMultiplier(state: GameState, good: string): number {

@@ -10,8 +10,10 @@ export interface Rect {
 
 /** Set a vertex height and remember it in the save game. */
 export function setVertexHeight(world: World, state: GameState, vi: number, h: number): void {
-  world.heights[vi] = h;
-  state.terrainEdits[vi] = Math.round(h * 1000) / 1000;
+  // Round so a reloaded world matches exactly.
+  const r = Math.round(h * 1000) / 1000;
+  world.heights[vi] = r;
+  state.terrainEdits[vi] = r;
 }
 
 /** Flatten the terrain under a footprint (cells x..x+w-1, y..y+h-1) to its mean height. */

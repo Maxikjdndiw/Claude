@@ -9,6 +9,7 @@ import type { World } from './world/types';
 import { Sim } from './sim';
 import { generateCountryRoads } from './roads';
 import { DIFFICULTIES, type Difficulty } from '../data/ai';
+import { SCENARIO } from '../data/scenarios';
 
 export const PLAYER_COLOR = '#008aa0';
 
@@ -39,6 +40,8 @@ export function createGame(world: World, companyName: string): GameState {
     gameOver: null,
     settings: { difficulty: 'normal', bots: 3 },
     learning: { seen: {}, queue: [] },
+    achievements: [],
+    flags: {},
     stats: [],
   };
   const maxPop = Math.max(...world.towns.map((t) => t.population));
@@ -72,4 +75,30 @@ export function startNewGame(world: World, companyName: string, difficulty: Diff
   generateCountryRoads(sim);
   sim.occ.rebuild(sim.state);
   return sim;
+}
+
+/** Apply a scenario's starting conditions to a new game. */
+export function applyScenario(sim: Sim, id: string): void {
+  const sc = SCENARIO[id];
+  if (!sc) return;
+  const s = sim.state;
+  const me = s.companies[0];
+  if (sc.startCash) me.cash = sc.startCash;
+  if (sc.startLoan) {
+    me.cash += sc.startLoan;
+    s.loans.push({
+      id: s.nextId++,
+      owner: 0,
+      principal: sc.startLoan,
+      balance: sc.startLoan,
+      rate: s.macro.baseRate + 0.03,
+      variable: false,
+      spread: 0.03,
+      monthsLeft: 72,
+      takenDay: 0,
+    });
+  }
+  if (sc.techs) me.techs.push(...sc.techs);
+  if (sc.recession) s.activeEvents.push({ id: 'recession', start: sc.recession.day, until: sc.recession.day + sc.recession.days });
+  s.scenario = { id, deadline: sc.years * 365, streak: 0 };
 }

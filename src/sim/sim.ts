@@ -19,6 +19,7 @@ import { runEvents } from './eventsys';
 import { serviceLoans } from './bank';
 import { earningsReaction, governance, updateStocks } from './stocks';
 import { detectConcepts } from './learning';
+import { checkAchievements, checkScenario } from './goals';
 import { marketShares } from './ai';
 import { GOODS } from '../data/goods';
 
@@ -70,12 +71,16 @@ export class Sim {
       governance(this);
       botsMonthly(this);
       this.recordStats();
+      checkScenario(this);
       if (updateTowns(s)) {
         this.occ.rebuild(s);
         this.townsDirty = true;
       }
     }
-    if (s.day % 5 === 0) detectConcepts(this);
+    if (s.day % 5 === 0) {
+      detectConcepts(this);
+      checkAchievements(this);
+    }
     s.rng = this.rng.state;
   }
 

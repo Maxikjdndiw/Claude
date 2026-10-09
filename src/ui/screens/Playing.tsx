@@ -12,6 +12,8 @@ import { RivalsPanel } from '../panels/Rivals';
 import { BankPanel, EconomyPanel, StocksPanel } from '../panels/Markets';
 import { GlossaryPanel, LessonCard } from '../panels/Learn';
 import { ChartsPanel } from '../panels/Charts';
+import { PauseMenu, ScenarioTracker } from '../panels/Overlays';
+import { TutorialCard } from '../panels/Tutorial';
 
 /** In-game HUD. */
 export function Playing({ game }: { game: Game }) {
@@ -39,9 +41,12 @@ export function Playing({ game }: { game: Game }) {
       <BuildMenu game={game} />
       <Toasts game={game} />
       <ErrorFlash game={game} />
+      <ScenarioTracker game={game} />
+      <TutorialCard game={game} />
       <LessonCard game={game} />
       <LineDialog game={game} />
       <GameOver game={game} />
+      <PauseMenu game={game} />
     </>
   );
 }
