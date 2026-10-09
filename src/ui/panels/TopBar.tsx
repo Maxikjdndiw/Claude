@@ -51,20 +51,23 @@ export function TopBar({ game }: { game: Game }) {
         ))}
       </div>
       <div class="tb-spacer" />
-      <button class={cls('btn small', left === 'finance' && 'on')} onClick={() => game.setLeftPanel('finance')}>
-        $ Finances
+      <button title="Finances" class={cls('btn small', left === 'finance' && 'on')} onClick={() => game.setLeftPanel('finance')}>
+        $<span class="lbl"> Finances</span>
       </button>
-      <button class={cls('btn small', left === 'lines' && 'on')} onClick={() => game.setLeftPanel('lines')}>
-        🚚 Lines
+      <button title="Transport lines" class={cls('btn small', left === 'lines' && 'on')} onClick={() => game.setLeftPanel('lines')}>
+        🚚<span class="lbl"> Lines</span>
       </button>
-      <button class={cls('btn small', left === 'research' && 'on')} onClick={() => game.setLeftPanel('research')}>
-        🔬 Research{me.research ? ' •' : ''}
+      <button title="Research" class={cls('btn small', left === 'research' && 'on')} onClick={() => game.setLeftPanel('research')}>
+        🔬<span class="lbl"> Research</span>{me.research ? ' •' : ''}
       </button>
-      <button class={cls('btn small', left === 'log' && 'on')} onClick={() => game.setLeftPanel('log')}>
-        ☰ News
+      <button title="Competitors" class={cls('btn small', left === 'rivals' && 'on')} onClick={() => game.setLeftPanel('rivals')}>
+        ⚔<span class="lbl"> Rivals</span>
       </button>
-      <button class={cls('btn small', showRes && 'on')} onClick={() => game.toggleResources()}>
-        ◈ Resources
+      <button title="News" class={cls('btn small', left === 'log' && 'on')} onClick={() => game.setLeftPanel('log')}>
+        ☰<span class="lbl"> News</span>
+      </button>
+      <button title="Show resource deposits" class={cls('btn small', showRes && 'on')} onClick={() => game.toggleResources()}>
+        ◈<span class="lbl"> Resources</span>
       </button>
       <button class="btn small ghost" onClick={() => game.backToMenu()}>
         Menu

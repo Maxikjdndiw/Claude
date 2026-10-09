@@ -116,7 +116,9 @@ export function updateFinance(state: GameState): void {
         emit(state, 'bad', 'Your cash is negative. The bank charges overdraft interest; after 60 days in the red you go bankrupt.', {
           concept: 'cashflow',
         });
-      if (c.negativeDays >= ECON.bankruptcyDays) {
+      // Small overdrafts are tolerated; a deep hole for too long is fatal.
+      const limit = Math.max(5000, companyAssets(state, c) * 0.1);
+      if (c.negativeDays >= ECON.bankruptcyDays && c.cash < -limit) {
         c.bankrupt = true;
         if (c.isPlayer) state.gameOver = { reason: 'Your company ran out of cash and went bankrupt.', day: state.day };
       }

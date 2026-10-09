@@ -13,6 +13,7 @@ import { closeLinesMonth, updateTransport } from './transport';
 import { updateTowns } from './towns';
 import { updateResearch } from './tech';
 import { regrow } from './resources';
+import { botsMonthly, updateBots } from './ai';
 
 /** Simulation context: static world + mutable state + derived caches. */
 export class Sim {
@@ -39,6 +40,7 @@ export class Sim {
   step(): void {
     const s = this.state;
     if (s.gameOver) return;
+    updateBots(this);
     updateLabor(s, this.rng);
     updateResearch(s);
     updateProduction(this);
@@ -52,6 +54,7 @@ export class Sim {
       closeMonth(s);
       closeMarketMonth(s);
       closeLinesMonth(s);
+      botsMonthly(this);
       if (updateTowns(s)) {
         this.occ.rebuild(s);
         this.townsDirty = true;

@@ -13,6 +13,8 @@ import { buildRoad, planRoad, type RoadPlan, type TrackMode } from './sim/roads'
 import { pitRadius, survey } from './sim/resources';
 import { isUnlocked } from './sim/tech';
 import { INFRA } from './data/transport';
+import { spawnBots } from './sim/ai';
+import type { Difficulty } from './data/ai';
 import { layoutTowns } from './sim/world/townLayout';
 import { generateWorld } from './sim/world/generate';
 import { analyzeSite, biomeOf, heightAt, type SiteAnalysis } from './sim/world/query';
@@ -20,7 +22,7 @@ import type { World } from './sim/world/types';
 import { Store } from './ui/store';
 
 export type Screen = 'menu' | 'pickStart' | 'playing';
-export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research';
+export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research' | 'rivals';
 export type Tool = null | 'road' | 'rail' | 'line' | 'survey';
 
 export const START_RADIUS = 14;
@@ -154,11 +156,11 @@ export class Game {
   }
 
   /** Main menu -> pick a start location on the generated map. */
-  newGame(seedText: string, companyName: string): void {
+  newGame(seedText: string, companyName: string, difficulty: Difficulty = 'normal'): void {
     const seed = parseSeed(seedText);
     // Always regenerate: the previous game may have edited the terrain.
     this.setWorld(generateWorld(seed));
-    this.sim = startNewGame(this.world!, companyName.trim() || 'Evergreen Industries');
+    this.sim = startNewGame(this.world!, companyName.trim() || 'Evergreen Industries', difficulty);
     const state = this.sim.state;
     const v = this.view;
     v.rig.autoRotate = 0;
@@ -198,6 +200,7 @@ export class Game {
       this.flashError(res.reason ?? 'Cannot found company here');
       return;
     }
+    spawnBots(this.sim);
     this.view.overlays!.cursor.visible = false;
     this.view.overlays!.selection.visible = false;
     this.view.rig.focus(sel.x + 0.5, sel.y + 0.5, 60);

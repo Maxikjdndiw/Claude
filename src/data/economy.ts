@@ -1,6 +1,8 @@
 /** Global economic tuning constants. */
 export const ECON = {
   startCash: 150_000,
+  /** Global multiplier on town demand (market size). */
+  demandScale: 1.6,
   startYear: 2000,
   /** Reference daily wage per worker before town wealth / labor scarcity. */
   baseWage: 12,

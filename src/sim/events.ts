@@ -6,7 +6,7 @@ export function emit(
   text: string,
   extra: { concept?: string; at?: { x: number; y: number }; owner?: number } = {},
 ): void {
-  // Only the player's own news is surfaced (bots act silently unless notable).
+  // Only the player's own news is surfaced; bot news is emitted without an owner.
   if (extra.owner !== undefined && extra.owner !== 0) return;
   const e = { day: state.day, kind, text, concept: extra.concept, at: extra.at };
   state.events.push(e);

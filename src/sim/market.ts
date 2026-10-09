@@ -18,7 +18,7 @@ import type { GameState, MarketState, Town } from './state';
 /** Base daily demand (tons) at the reference price. */
 export function baseDemand(town: Town, goodId: string): number {
   const g = GOOD[goodId];
-  return g.perCapita * town.population * Math.pow(town.wealth, g.incomeElasticity);
+  return ECON.demandScale * g.perCapita * town.population * Math.pow(town.wealth, g.incomeElasticity);
 }
 
 export function refPrice(state: GameState, goodId: string): number {

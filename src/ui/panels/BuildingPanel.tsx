@@ -17,6 +17,7 @@ export function BuildingPanel({ game }: { game: Game }) {
   const b = st.buildings.find((x) => x.id === id);
   if (!b) return null;
   const def = BUILDING[b.type];
+  if (b.owner !== 0) return <RivalBuilding game={game} id={b.id} />;
   const town = b.town >= 0 ? st.towns[b.town] : null;
   const mw = town ? marketWage(st, town) : 0;
   const local = localTowns(st, b)[0];
@@ -279,6 +280,48 @@ export function BuildingPanel({ game }: { game: Game }) {
           )}
         </div>
       )}
+    </aside>
+  );
+}
+
+function RivalBuilding({ game, id }: { game: Game; id: number }) {
+  const st = game.state!;
+  const b = st.buildings.find((x) => x.id === id)!;
+  const def = BUILDING[b.type];
+  const owner = st.companies[b.owner];
+  const outGood = def.recipe ? Object.keys(def.recipe.outputs)[0] : null;
+  return (
+    <aside class="side panel right">
+      <div class="row between">
+        <div>
+          <span class="eyebrow">
+            <i class="swatch" style={{ background: owner.color }} />
+            {owner.name}
+          </span>
+          <h2>{def.name}</h2>
+        </div>
+        <button class="btn small ghost" onClick={() => game.selectBuilding(null)}>
+          ✕
+        </button>
+      </div>
+      <span class="chip">{b.status}</span>
+      {outGood && (
+        <div class="kv">
+          <span>Output</span>
+          <b>
+            {tons(b.rate)}/day {GOOD[outGood].icon}
+          </b>
+        </div>
+      )}
+      <div class="kv">
+        <span>Workers</span>
+        <b>{b.workers}</b>
+      </div>
+      <div class="kv">
+        <span>Wage paid</span>
+        <b>{price(b.wage)}/day</b>
+      </div>
+      <p class="muted small">A competitor. Its output competes with yours in the same town markets, and it hires from the same labor pool.</p>
     </aside>
   );
 }

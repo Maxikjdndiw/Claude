@@ -1,6 +1,8 @@
 import type { DepositSeed } from './world/types';
+import type { Difficulty, Personality } from '../data/ai';
+import type { Category } from '../data/buildings';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export const LEDGER_CATS = [
   'sales',
@@ -47,6 +49,17 @@ export interface Company {
   hq: { x: number; y: number } | null;
   techs: string[];
   research: { tech: string; daysLeft: number } | null;
+  /** Present for computer-controlled competitors. */
+  ai?: AiState;
+}
+
+export interface AiState {
+  personality: Personality;
+  /** Industry a specialist focuses on. */
+  specialty?: Category;
+  nextThink: number;
+  /** Consecutive loss-making months per building id. */
+  losses: Record<number, number>;
 }
 
 export interface BuildingStats {
@@ -220,6 +233,7 @@ export interface GameState {
   /** Log of recent notable events (kept short). */
   log: GameEvent[];
   gameOver: null | { reason: string; day: number };
+  settings: { difficulty: Difficulty; bots: number };
 }
 
 export const PLAYER = 0;

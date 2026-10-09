@@ -873,3 +873,72 @@ input[type='range'] {
 .tbl tr.dim td {
   color: var(--ink3);
 }
+/* ---------- Milestone 5 ---------- */
+.seg-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  background: #eef2f4;
+  border-radius: 10px;
+  padding: 3px;
+}
+.seg-row .seg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px;
+}
+.seg-row small {
+  font-weight: 500;
+  font-size: 10.5px;
+  color: var(--ink3);
+}
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.tbl tr.me td {
+  background: #eef7f8;
+}
+.share-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  margin: 5px 0;
+}
+.share-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.share-bar > div {
+  height: 100%;
+}
+.topbar {
+  gap: 16px;
+  overflow: hidden;
+}
+.tb-company b {
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tb-stat {
+  white-space: nowrap;
+}
+.topbar .btn {
+  padding: 5px 8px;
+}
+@media (max-width: 1500px) {
+  .topbar .lbl {
+    display: none;
+  }
+}

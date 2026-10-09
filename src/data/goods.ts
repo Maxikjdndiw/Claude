@@ -29,23 +29,23 @@ export interface GoodDef {
 export const GOODS: GoodDef[] = [
   // --- Food chain
   g('wheat', 'Wheat', 40, 'raw', '#e5c35c', '🌾', 0.0011, 0.6, 0.2),
-  g('flour', 'Flour', 88, 'intermediate', '#efe6d2', '🥣', 0.0008, 0.7, 0.3),
+  g('flour', 'Flour', 95, 'intermediate', '#efe6d2', '🥣', 0.0008, 0.7, 0.3),
   g('bread', 'Bread', 140, 'consumer', '#c98b4a', '🍞', 0.0006, 0.5, 0.3),
-  g('fish', 'Fish', 95, 'consumer', '#7fb3c8', '🐟', 0.0004, 0.6, 0.5),
+  g('fish', 'Fish', 70, 'consumer', '#7fb3c8', '🐟', 0.0004, 0.6, 0.5),
   // --- Wood chain
   g('logs', 'Logs', 30, 'raw', '#9c6b43', '🪵', 0.0008, 0.6, 0.3),
-  g('planks', 'Planks', 70, 'intermediate', '#d9b07a', '🪚', 0.0006, 0.7, 0.6),
-  g('furniture', 'Furniture', 260, 'consumer', '#b5651d', '🪑', 0.00015, 1.3, 1.4),
+  g('planks', 'Planks', 90, 'intermediate', '#d9b07a', '🪚', 0.0012, 0.7, 0.6),
+  g('furniture', 'Furniture', 300, 'consumer', '#b5651d', '🪑', 0.00015, 1.3, 1.4),
   // --- Mining & metal chain
   g('stone', 'Stone', 25, 'raw', '#a9a9a9', '🪨', 0.0015, 0.8, 0.6),
-  g('iron_ore', 'Iron ore', 45, 'raw', '#b5654a', '⛏', 0.0004, 0.6, 0.5),
-  g('coal', 'Coal', 35, 'raw', '#3f3f46', '⚫', 0.0006, 0.5, 0.4),
-  g('steel', 'Steel', 210, 'intermediate', '#8a9bb0', '🔩', 0.0003, 0.8, 0.8),
-  g('tools', 'Tools', 420, 'consumer', '#6b7a8f', '🔧', 0.00008, 0.9, 0.9),
-  g('machines', 'Machines', 1400, 'consumer', '#4b5d73', '⚙', 0.00002, 1.1, 1.3),
+  g('iron_ore', 'Iron ore', 45, 'raw', '#b5654a', '⛏', 0.0008, 0.6, 0.5),
+  g('coal', 'Coal', 35, 'raw', '#3f3f46', '⚫', 0.0008, 0.5, 0.4),
+  g('steel', 'Steel', 260, 'intermediate', '#8a9bb0', '🔩', 0.0006, 0.8, 0.8),
+  g('tools', 'Tools', 480, 'consumer', '#6b7a8f', '🔧', 0.0002, 0.9, 0.9),
+  g('machines', 'Machines', 1600, 'consumer', '#4b5d73', '⚙', 0.00006, 1.1, 1.3),
   // --- Energy chain
   g('crude', 'Crude oil', 60, 'raw', '#1f2937', '🛢', 0.0002, 0.4, 0.5),
-  g('fuel', 'Fuel', 140, 'consumer', '#e0a43a', '⛽', 0.0006, 0.4, 0.8),
+  g('fuel', 'Fuel', 160, 'consumer', '#e0a43a', '⛽', 0.0012, 0.4, 0.8),
 ];
 
 function g(

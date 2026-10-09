@@ -149,9 +149,21 @@ export default async function steps(page, out) {
   });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${out}/09-mine-pit.png` });
+  // Milestone 5: competitors after a while.
+  await page.evaluate(() => {
+    const g = window.game;
+    g.advance(300);
+    g.selectBuilding(null);
+    g.setLeftPanel('rivals');
+    const bot = g.state.buildings.find((b) => b.owner > 0 && b.type !== 'hq');
+    if (bot) g.focusBuilding(bot.id);
+    g.view.rig.setView(0.7, 0.9, 40, true);
+  });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${out}/10-rivals.png` });
   const summary = await page.evaluate(() => {
     const s = window.game.state;
-    return { day: s.day, cash: Math.round(s.companies[0].cash), buildings: s.buildings.map((b) => [b.type, b.workers, b.status]), lines: s.lines.map((l) => [l.status, l.length, l.last]), mineDep: window.__mineDep && [window.__mineDep.amount, window.__mineDep.initial, window.__mineDep.pitDepth, window.__mineDep.pitBase, window.game.world.heights[window.__mineDep.y * window.game.world.n + window.__mineDep.x], window.game.view.terrain.world === window.game.sim.world, Object.keys(s.terrainEdits).length, window.__mineDep.x, window.__mineDep.y, (() => { const d = window.__mineDep; let best = 99; for (const m of window.game.view.terrain.meshes) { const p = m.geometry.attributes.position.array; for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i] - d.x) < 1 && Math.abs(p[i + 2] - d.y) < 1) best = Math.min(best, p[i + 1]); } return best; })(), Array.from(window.game.view.terrain.dug).filter(Boolean).length] };
+    return { day: s.day, cash: Math.round(s.companies[0].cash), buildings: s.buildings.filter((b) => b.owner === 0).map((b) => [b.type, b.workers, b.status]), rivals: s.companies.map((c) => [c.name, Math.round(c.cash), s.buildings.filter((b) => b.owner === c.id).length, c.bankrupt]), lines: s.lines.map((l) => [l.status, l.length, l.last]), mineDep: window.__mineDep && [window.__mineDep.amount, window.__mineDep.initial, window.__mineDep.pitDepth, window.__mineDep.pitBase, window.game.world.heights[window.__mineDep.y * window.game.world.n + window.__mineDep.x], window.game.view.terrain.world === window.game.sim.world, Object.keys(s.terrainEdits).length, window.__mineDep.x, window.__mineDep.y, (() => { const d = window.__mineDep; let best = 99; for (const m of window.game.view.terrain.meshes) { const p = m.geometry.attributes.position.array; for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i] - d.x) < 1 && Math.abs(p[i + 2] - d.y) < 1) best = Math.min(best, p[i + 1]); } return best; })(), Array.from(window.game.view.terrain.dug).filter(Boolean).length] };
   });
   console.log(JSON.stringify(summary));
 }

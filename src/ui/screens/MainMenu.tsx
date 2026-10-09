@@ -1,9 +1,12 @@
 import { useState } from 'preact/hooks';
 import { randomSeedText, type Game } from '../../game';
+import { DIFFICULTIES, type Difficulty } from '../../data/ai';
+import { cls } from '../format';
 
 export function MainMenu({ game }: { game: Game }) {
   const [seed, setSeed] = useState(game.ui.state.seedText);
   const [name, setName] = useState(game.ui.state.companyName);
+  const [diff, setDiff] = useState<Difficulty>('normal');
 
   const reroll = () => {
     const s = randomSeedText();
@@ -38,7 +41,18 @@ export function MainMenu({ game }: { game: Game }) {
             </button>
           </div>
         </label>
-        <button class="btn primary big" onClick={() => game.newGame(seed, name)}>
+        <div class="field">
+          <span>Competition</span>
+          <div class="seg-row">
+            {(Object.keys(DIFFICULTIES) as Difficulty[]).map((d) => (
+              <button key={d} class={cls('seg', diff === d && 'on')} onClick={() => setDiff(d)}>
+                {DIFFICULTIES[d].name}
+                <small>{DIFFICULTIES[d].bots} rivals</small>
+              </button>
+            ))}
+          </div>
+        </div>
+        <button class="btn primary big" onClick={() => game.newGame(seed, name, diff)}>
           New free-play game
         </button>
         <p class="hint">Drag to pan · right-drag to rotate · scroll to zoom · WASD / QE</p>
