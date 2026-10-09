@@ -9,6 +9,7 @@ import { TownPanel } from '../panels/TownPanel';
 import { LineDialog, LinesPanel, ToolHint } from '../panels/Transport';
 import { ResearchPanel } from '../panels/Research';
 import { RivalsPanel } from '../panels/Rivals';
+import { BankPanel, EconomyPanel, StocksPanel } from '../panels/Markets';
 
 /** In-game HUD. */
 export function Playing({ game }: { game: Game }) {
@@ -24,6 +25,9 @@ export function Playing({ game }: { game: Game }) {
       {left === 'lines' && <LinesPanel game={game} />}
       {left === 'research' && <ResearchPanel game={game} />}
       {left === 'rivals' && <RivalsPanel game={game} />}
+      {left === 'economy' && <EconomyPanel game={game} />}
+      {left === 'bank' && <BankPanel game={game} />}
+      {left === 'stocks' && <StocksPanel game={game} />}
       <ToolHint game={game} />
       {building && <PlacementHint game={game} />}
       {!building && selB !== null && <BuildingPanel game={game} />}

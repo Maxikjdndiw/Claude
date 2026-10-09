@@ -39,10 +39,22 @@ export function TopBar({ game }: { game: Game }) {
         <span>Company value</span>
         <b>{money(companyValue(st, me), { compact: true })}</b>
       </div>
+      {me.equity.listed && (
+        <div class="tb-stat">
+          <span>Share price</span>
+          <b>${me.equity.price.toFixed(2)}</b>
+        </div>
+      )}
       <div class="tb-stat">
         <span>Date</span>
         <b>{formatDate(st.day)}</b>
       </div>
+      <button class="eco-badge" title="Economy: business cycle, inflation and interest rates" onClick={() => game.setLeftPanel('economy')}>
+        <span>{st.macro.phase === 'boom' ? '📈' : st.macro.phase === 'recession' ? '📉' : '➖'}</span>
+        <small>
+          rate {(st.macro.baseRate * 100).toFixed(2)}% · infl. {(st.macro.inflation * 100).toFixed(1)}%
+        </small>
+      </button>
       <div class="speed">
         {SPEEDS.map((s) => (
           <button key={s.v} title={s.title} class={cls('seg', speed === s.v && 'on')} onClick={() => game.setSpeed(s.v)}>
@@ -52,7 +64,13 @@ export function TopBar({ game }: { game: Game }) {
       </div>
       <div class="tb-spacer" />
       <button title="Finances" class={cls('btn small', left === 'finance' && 'on')} onClick={() => game.setLeftPanel('finance')}>
-        $<span class="lbl"> Finances</span>
+        💰<span class="lbl"> Finances</span>
+      </button>
+      <button title="Bank & loans" class={cls('btn small', left === 'bank' && 'on')} onClick={() => game.setLeftPanel('bank')}>
+        🏦<span class="lbl"> Bank</span>
+      </button>
+      <button title="Stock market" class={cls('btn small', left === 'stocks' && 'on')} onClick={() => game.setLeftPanel('stocks')}>
+        📊<span class="lbl"> Stocks</span>
       </button>
       <button title="Transport lines" class={cls('btn small', left === 'lines' && 'on')} onClick={() => game.setLeftPanel('lines')}>
         🚚<span class="lbl"> Lines</span>
@@ -61,13 +79,13 @@ export function TopBar({ game }: { game: Game }) {
         🔬<span class="lbl"> Research</span>{me.research ? ' •' : ''}
       </button>
       <button title="Competitors" class={cls('btn small', left === 'rivals' && 'on')} onClick={() => game.setLeftPanel('rivals')}>
-        ⚔<span class="lbl"> Rivals</span>
+        👥<span class="lbl"> Rivals</span>
       </button>
       <button title="News" class={cls('btn small', left === 'log' && 'on')} onClick={() => game.setLeftPanel('log')}>
-        ☰<span class="lbl"> News</span>
+        📰<span class="lbl"> News</span>
       </button>
       <button title="Show resource deposits" class={cls('btn small', showRes && 'on')} onClick={() => game.toggleResources()}>
-        ◈<span class="lbl"> Resources</span>
+        💎<span class="lbl"> Resources</span>
       </button>
       <button class="btn small ghost" onClick={() => game.backToMenu()}>
         Menu

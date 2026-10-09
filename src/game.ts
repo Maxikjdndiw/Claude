@@ -22,7 +22,7 @@ import type { World } from './sim/world/types';
 import { Store } from './ui/store';
 
 export type Screen = 'menu' | 'pickStart' | 'playing';
-export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research' | 'rivals';
+export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research' | 'rivals' | 'economy' | 'bank' | 'stocks';
 export type Tool = null | 'road' | 'rail' | 'line' | 'survey';
 
 export const START_RADIUS = 14;

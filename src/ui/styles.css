@@ -942,3 +942,27 @@ input[type='range'] {
     display: none;
   }
 }
+/* ---------- Milestone 6 ---------- */
+.eco-badge {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: #f6f8fa;
+  border-radius: 9px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.eco-badge small {
+  font-size: 11px;
+  color: var(--ink2);
+  font-weight: 600;
+}
+.seg-inline {
+  display: flex;
+  background: #eef2f4;
+  border-radius: 9px;
+  padding: 2px;
+}

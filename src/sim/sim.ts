@@ -14,6 +14,10 @@ import { updateTowns } from './towns';
 import { updateResearch } from './tech';
 import { regrow } from './resources';
 import { botsMonthly, updateBots } from './ai';
+import { updateMacroDaily, updateMacroMonthly } from './macro';
+import { runEvents } from './eventsys';
+import { serviceLoans } from './bank';
+import { earningsReaction, governance, updateStocks } from './stocks';
 
 /** Simulation context: static world + mutable state + derived caches. */
 export class Sim {
@@ -40,6 +44,7 @@ export class Sim {
   step(): void {
     const s = this.state;
     if (s.gameOver) return;
+    updateMacroDaily(s, this.rng);
     updateBots(this);
     updateLabor(s, this.rng);
     updateResearch(s);
@@ -49,11 +54,17 @@ export class Sim {
     updateTransport(s);
     updateMarkets(s);
     updateFinance(s);
+    updateStocks(s, this.rng);
     s.day++;
     if (isMonthStart(s.day)) {
+      serviceLoans(s);
       closeMonth(s);
       closeMarketMonth(s);
       closeLinesMonth(s);
+      updateMacroMonthly(s, this.rng);
+      runEvents(this);
+      earningsReaction(s);
+      governance(this);
       botsMonthly(this);
       if (updateTowns(s)) {
         this.occ.rebuild(s);

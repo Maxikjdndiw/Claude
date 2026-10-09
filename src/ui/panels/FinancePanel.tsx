@@ -1,9 +1,13 @@
 import { BUILDING } from '../../data/buildings';
 import type { Game } from '../../game';
 import {
+  bookEquity,
   companyValue,
+  debtOf,
   expenses,
+  fixedAssets,
   inventoryValue,
+  investmentsValue,
   netProfit,
   operatingProfit,
   trailing,
@@ -121,8 +125,10 @@ export function FinancePanel({ game }: { game: Game }) {
   if (me.history.length > 1) cols.push({ label: `Last ${Math.min(12, me.history.length)} mo`, l: trailing(me, 12) });
 
   const mine = st.buildings.filter((b) => b.owner === 0);
-  const fixedAssets = mine.reduce((a, b) => a + b.bookValue, 0);
+  const fixed = fixedAssets(st, 0);
   const inv = inventoryValue(st, 0);
+  const invest = investmentsValue(st, me);
+  const debt = debtOf(st, 0);
   const cf = last?.cashflow;
 
   return (
@@ -163,23 +169,37 @@ export function FinancePanel({ game }: { game: Game }) {
             <td>{money(me.cash)}</td>
           </tr>
           <tr>
-            <td>Buildings (book value)</td>
-            <td>{money(fixedAssets)}</td>
+            <td>Buildings & vehicles (book value)</td>
+            <td>{money(fixed)}</td>
           </tr>
           <tr>
             <td>Inventory</td>
             <td>{money(inv)}</td>
           </tr>
+          <tr>
+            <td>Shares in other companies</td>
+            <td>{money(invest)}</td>
+          </tr>
           <tr class="sub">
             <td>Total assets</td>
-            <td>{money(me.cash + fixedAssets + inv)}</td>
+            <td>{money(Math.max(0, me.cash) + fixed + inv + invest)}</td>
           </tr>
           <tr>
-            <td>Debt</td>
-            <td>{money(0)}</td>
+            <td>− Loans</td>
+            <td>{money(debt)}</td>
+          </tr>
+          {me.cash < 0 && (
+            <tr>
+              <td>− Overdraft</td>
+              <td>{money(-me.cash)}</td>
+            </tr>
+          )}
+          <tr class="sub">
+            <td>Equity (book)</td>
+            <td>{money(bookEquity(st, me))}</td>
           </tr>
           <tr class="strong">
-            <td>Company value (est.)</td>
+            <td>{me.equity.listed ? 'Market capitalization' : 'Company value (est.)'}</td>
             <td>{money(companyValue(st, me))}</td>
           </tr>
         </tbody>

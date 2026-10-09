@@ -3,6 +3,7 @@ import { ECON } from '../data/economy';
 import { emit } from './events';
 import type { SimRng } from './rng';
 import type { Building, GameState, Town } from './state';
+import { wageFloor } from './macro';
 
 /**
  * Labor market per town. The market wage rises when unemployment is low
@@ -11,7 +12,7 @@ import type { Building, GameState, Town } from './state';
 export function marketWage(state: GameState, town: Town): number {
   const u = Math.max(0.005, town.unemployed / Math.max(1, town.workforce));
   const scarcity = Math.min(1.7, Math.max(0.75, Math.pow(u / ECON.naturalUnemployment, -0.3)));
-  return ECON.baseWage * Math.pow(town.wealth, 0.8) * state.priceLevel * scarcity;
+  return Math.max(wageFloor(state), ECON.baseWage * Math.pow(town.wealth, 0.8) * state.priceLevel * scarcity);
 }
 
 export function townOf(state: GameState, b: Building): Town | undefined {
@@ -27,6 +28,8 @@ export function updateLabor(state: GameState, rng: SimRng): void {
     const town = townOf(state, b);
     if (!town) continue;
     const mw = marketWage(state, town);
+    const floor = wageFloor(state);
+    if (b.wage < floor) b.wage = Math.ceil(floor * 10) / 10;
 
     // Layoffs.
     if (b.workers > b.targetWorkers) {
@@ -77,7 +80,9 @@ export function updateLabor(state: GameState, rng: SimRng): void {
   // The rest of the town economy slowly adapts (migration, other employers).
   for (const town of state.towns) {
     const companyJobs = employedBy.get(town.id) ?? 0;
-    const target = Math.max(town.workforce * 0.01, town.workforce * ECON.naturalUnemployment - 0.35 * companyJobs);
+    // Recessions push unemployment up, booms pull it down.
+    const natural = Math.max(0.02, ECON.naturalUnemployment - 0.8 * state.macro.gap);
+    const target = Math.max(town.workforce * 0.01, town.workforce * natural - 0.35 * companyJobs);
     town.unemployed += (target - town.unemployed) * 0.01;
     town.wage = marketWage(state, town);
   }

@@ -15,5 +15,7 @@ export function newCompany(id: number, name: string, color: string, isPlayer: bo
     hq: null,
     techs: [],
     research: null,
+    equity: { shares: 1_000_000, holdings: { founder: 1_000_000 }, listed: false, price: cash / 1_000_000, sentiment: 1, history: [] },
+    founderWealth: 0,
   };
 }

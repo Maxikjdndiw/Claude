@@ -2,7 +2,7 @@ import type { DepositSeed } from './world/types';
 import type { Difficulty, Personality } from '../data/ai';
 import type { Category } from '../data/buildings';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export const LEDGER_CATS = [
   'sales',
@@ -51,6 +51,58 @@ export interface Company {
   research: { tech: string; daysLeft: number } | null;
   /** Present for computer-controlled competitors. */
   ai?: AiState;
+  equity: Equity;
+  /** Dividends and sale proceeds received personally by the founders. */
+  founderWealth: number;
+  /** Set when another company took this one over. */
+  acquiredBy?: number;
+}
+
+/** Shares and ownership. Holder keys: 'founder', 'public', or 'c<companyId>'. */
+export interface Equity {
+  shares: number;
+  holdings: Record<string, number>;
+  listed: boolean;
+  price: number;
+  /** Market mood multiplier on fundamental value (listed companies). */
+  sentiment: number;
+  /** Weekly share price history. */
+  history: number[];
+  ipoDay?: number;
+}
+
+export interface Loan {
+  id: number;
+  owner: number;
+  principal: number;
+  balance: number;
+  /** Annual interest rate currently charged. */
+  rate: number;
+  /** Variable-rate loans follow the central bank rate plus the spread. */
+  variable: boolean;
+  spread: number;
+  monthsLeft: number;
+  takenDay: number;
+}
+
+export type Phase = 'boom' | 'normal' | 'recession';
+
+export interface Macro {
+  phase: Phase;
+  /** Output gap: + boom, - recession (fraction of normal output). */
+  gap: number;
+  /** Annual inflation rate. */
+  inflation: number;
+  /** Central bank policy rate (annual). */
+  baseRate: number;
+  history: { day: number; gap: number; inflation: number; baseRate: number; phase: Phase; priceLevel: number }[];
+}
+
+export interface ActiveEvent {
+  id: string;
+  start: number;
+  until: number;
+  town?: number;
 }
 
 export interface AiState {
@@ -103,6 +155,8 @@ export interface Building {
   last: BuildingStats;
   /** Day of the last 'workers quit' notice (avoids spamming the news). */
   quitNotice?: number;
+  /** Out of action (disaster repairs) until this day. */
+  disabledUntil?: number;
 }
 
 export interface MarketState {
@@ -228,6 +282,9 @@ export interface GameState {
   terrainEdits: Record<number, number>;
   /** Price level index (1 = start). */
   priceLevel: number;
+  macro: Macro;
+  activeEvents: ActiveEvent[];
+  loans: Loan[];
   /** Events produced since the UI last drained them (not essential to save). */
   events: GameEvent[];
   /** Log of recent notable events (kept short). */

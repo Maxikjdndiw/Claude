@@ -7,7 +7,9 @@ import { COMPANY_NAMES } from '../data/names';
 import { TECHS } from '../data/techs';
 import * as cmd from './commands';
 import { emit } from './events';
-import { netProfit } from './finance';
+import { debtOf, fundamentalValue, netProfit } from './finance';
+import { creditLimit, repayLoan, takeLoan } from './bank';
+import { buyQuote, buyShares, ipo, ipoCheck, listed } from './stocks';
 import { marketWage } from './labor';
 import { center, distance, localTowns } from './logistics';
 import { baseDemand } from './market';
@@ -148,7 +150,7 @@ export function updateBots(sim: Sim): void {
   const { state } = sim;
   const diff = DIFFICULTIES[state.settings.difficulty];
   for (const c of state.companies) {
-    if (!c.ai || c.bankrupt) continue;
+    if (!c.ai || c.bankrupt || c.acquiredBy !== undefined) continue;
     if (state.day < c.ai.nextThink) continue;
     c.ai.nextThink = state.day + diff.thinkDays + Math.floor(rnd(sim) * 4);
     manageBuildings(sim, c);
@@ -268,12 +270,13 @@ function considerExpansion(sim: Sim, c: Company): void {
 export function botsMonthly(sim: Sim): void {
   const { state } = sim;
   for (const c of state.companies) {
-    if (!c.ai) continue;
+    if (!c.ai || c.acquiredBy !== undefined) continue;
     if (c.bankrupt) {
       liquidate(sim, c);
       continue;
     }
     const p = PERSONALITIES[c.ai.personality];
+    botFinance(sim, c);
     for (const b of state.buildings) {
       if (b.owner !== c.id || b.type === 'hq' || b.buildLeft > 0) continue;
       const profit = b.last.revenue - b.last.costs;
@@ -335,4 +338,43 @@ export function marketShares(state: GameState, good: string): Map<number, number
   const out = new Map<number, number>();
   for (const [k, v] of tons) out.set(k, total > 0 ? v / total : 0);
   return out;
+}
+
+/** Bots borrow to expand, repay when flush, go public and buy into rivals. */
+function botFinance(sim: Sim, c: Company): void {
+  const { state } = sim;
+  const ai = c.ai!;
+  const last = c.history[c.history.length - 1];
+  const profitable = last ? netProfit(last.ledger) > 0 : false;
+  const debt = debtOf(state, c.id);
+  // Borrow to fund growth (not the cautious ones).
+  if (ai.personality !== 'cautious' && profitable && c.cash < 60000 * state.priceLevel && !debt) {
+    const limit = creditLimit(state, c) * (ai.personality === 'aggressive' ? 0.5 : 0.25);
+    if (limit > 20000) takeLoan(state, c.id, limit, 60, ai.personality === 'aggressive');
+  }
+  // Pay debt down when cash piles up.
+  if (debt > 0 && c.cash > 300000 * state.priceLevel) {
+    for (const l of state.loans.filter((x) => x.owner === c.id)) repayLoan(state, c.id, l.id);
+  }
+  // Go public once big enough.
+  if (!c.equity.listed && ipoCheck(state, c).ok && (ai.personality !== 'cautious' || rnd(sim) < 0.2)) {
+    ipo(state, c.id, ai.personality === 'aggressive' ? 0.45 : 0.3);
+  }
+  // Invest spare cash in undervalued listed rivals.
+  if (c.cash > 400000 * state.priceLevel) {
+    for (const t of listed(state)) {
+      if (t.id === c.id) continue;
+      const fair = fundamentalValue(state, t) / t.equity.shares;
+      const cheap = t.equity.price < fair * (ai.personality === 'aggressive' ? 0.95 : 0.8);
+      if (!cheap || rnd(sim) > 0.5) continue;
+      const n = Math.min(t.equity.holdings.public ?? 0, Math.floor((c.cash * 0.2) / buyQuote(t, 1)), Math.floor(t.equity.shares * 0.04));
+      if (n > 0) {
+        buyShares(sim, c.id, t.id, n);
+        if (t.isPlayer)
+          emit(state, 'bad', `${c.name} bought ${((n / t.equity.shares) * 100).toFixed(1)}% of your shares. Watch out: whoever holds more than 50% controls your company.`, {
+            concept: 'corporate-control',
+          });
+      }
+    }
+  }
 }

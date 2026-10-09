@@ -71,11 +71,51 @@ export function inventoryValue(state: GameState, owner: number): number {
   return v;
 }
 
-export function companyAssets(state: GameState, c: Company): number {
+export function debtOf(state: GameState, owner: number): number {
+  let d = 0;
+  for (const l of state.loans) if (l.owner === owner) d += l.balance;
+  return d;
+}
+
+/** Market value of shares this company holds in other companies. */
+export function investmentsValue(state: GameState, c: Company): number {
+  let v = 0;
+  for (const o of state.companies) {
+    if (o.id === c.id) continue;
+    v += (o.equity.holdings[`c${c.id}`] ?? 0) * o.equity.price;
+  }
+  return v;
+}
+
+export function fixedAssets(state: GameState, owner: number): number {
   let book = 0;
-  for (const b of state.buildings) if (b.owner === c.id) book += b.bookValue;
-  for (const l of state.lines) if (l.owner === c.id) book += l.bookValue;
-  return c.cash + book + inventoryValue(state, c.id);
+  for (const b of state.buildings) if (b.owner === owner) book += b.bookValue;
+  for (const l of state.lines) if (l.owner === owner) book += l.bookValue;
+  return book;
+}
+
+export function companyAssets(state: GameState, c: Company): number {
+  return Math.max(0, c.cash) + fixedAssets(state, c.id) + inventoryValue(state, c.id) + investmentsValue(state, c);
+}
+
+/** Book equity: assets minus debt (and minus any overdraft). */
+export function bookEquity(state: GameState, c: Company): number {
+  return companyAssets(state, c) - debtOf(state, c.id) - Math.max(0, -c.cash);
+}
+
+/** Price/earnings multiple investors pay: lower when interest rates are high. */
+export function peMultiple(state: GameState): number {
+  const m = state.macro;
+  const base = 11 * (0.06 / (m.baseRate + 0.02));
+  const mood = m.phase === 'boom' ? 1.15 : m.phase === 'recession' ? 0.85 : 1;
+  return Math.min(22, Math.max(4, base * mood));
+}
+
+/** Fundamental value: book equity plus the value of future earnings. */
+export function fundamentalValue(state: GameState, c: Company): number {
+  const n = Math.min(12, c.history.length);
+  const ttm = n ? (netProfit(trailing(c, n)) * 12) / n : 0;
+  return Math.max(1000, bookEquity(state, c) + Math.max(0, ttm) * peMultiple(state) * 0.5);
 }
 
 /** Sum of the last `months` closed months. */
@@ -88,9 +128,8 @@ export function trailing(c: Company, months: number): Ledger {
  * positive) recent earnings. Before an IPO this is the yardstick for success.
  */
 export function companyValue(state: GameState, c: Company): number {
-  const n = Math.min(12, c.history.length);
-  const ttm = n ? (netProfit(trailing(c, n)) * 12) / n : 0;
-  return Math.max(0, companyAssets(state, c) + Math.max(0, ttm) * 4);
+  if (c.bankrupt || c.acquiredBy !== undefined) return 0;
+  return c.equity.listed ? c.equity.price * c.equity.shares : fundamentalValue(state, c);
 }
 
 /** Daily running costs: wages, upkeep, depreciation, overdraft interest. */
@@ -99,7 +138,7 @@ export function updateFinance(state: GameState): void {
     if (b.buildLeft > 0) continue;
     const c = state.companies[b.owner];
     const wages = b.workers * b.wage;
-    const upkeep = maintenance(b);
+    const upkeep = maintenance(b, state);
     const dep = Math.min(b.bookValue, dailyDepreciation(b));
     book(c, 'wages', wages);
     book(c, 'maintenance', upkeep);
@@ -109,11 +148,12 @@ export function updateFinance(state: GameState): void {
   }
   for (const c of state.companies) {
     if (c.bankrupt) continue;
+    if (c.bankrupt || c.acquiredBy !== undefined) continue;
     if (c.cash < 0) {
-      book(c, 'interest', (-c.cash * ECON.overdraftRate) / 365);
+      book(c, 'interest', (-c.cash * (state.macro.baseRate + 0.12)) / 365);
       c.negativeDays++;
       if (c.negativeDays === 1 && c.isPlayer)
-        emit(state, 'bad', 'Your cash is negative. The bank charges overdraft interest; after 60 days in the red you go bankrupt.', {
+        emit(state, 'bad', 'Your cash is negative. The bank charges expensive overdraft interest; take a loan or cut costs before it is too late.', {
           concept: 'cashflow',
         });
       // Small overdrafts are tolerated; a deep hole for too long is fatal.

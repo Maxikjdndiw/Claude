@@ -1,6 +1,7 @@
 import { ECON } from '../data/economy';
 import { GOOD, GOODS } from '../data/goods';
 import type { GameState, MarketState, Town } from './state';
+import { demandMultiplier, incomeFactor, supplyMultiplier } from './macro';
 
 /**
  * Supply & demand in a town market.
@@ -16,9 +17,11 @@ import type { GameState, MarketState, Town } from './state';
  */
 
 /** Base daily demand (tons) at the reference price. */
-export function baseDemand(town: Town, goodId: string): number {
+export function baseDemand(town: Town, goodId: string, state?: GameState): number {
   const g = GOOD[goodId];
-  return ECON.demandScale * g.perCapita * town.population * Math.pow(town.wealth, g.incomeElasticity);
+  const income = state ? incomeFactor(state) : 1;
+  const cycle = state ? demandMultiplier(state, goodId) * (1 + 0.5 * state.macro.gap) : 1;
+  return ECON.demandScale * g.perCapita * town.population * Math.pow(town.wealth * income, g.incomeElasticity) * cycle;
 }
 
 export function refPrice(state: GameState, goodId: string): number {
@@ -106,11 +109,12 @@ export function updateMarkets(state: GameState): void {
   for (const town of state.towns) {
     for (const g of GOODS) {
       const m = town.market[g.id];
-      const d0 = baseDemand(town, g.id);
+      const d0 = baseDemand(town, g.id, state);
       const rel = m.price / refPrice(state, g.id);
       const demand = d0 * Math.pow(rel, -g.elasticity);
       const consumed = Math.min(m.stock, demand);
-      const outside = d0 * g.outsideSupply * Math.pow(rel, g.supplyElasticity);
+      // Outside supply is anchored to normal demand (not the cycle) and hit by supply shocks.
+      const outside = baseDemand(town, g.id) * g.outsideSupply * supplyMultiplier(state, g.id) * Math.pow(rel, g.supplyElasticity);
       m.stock += outside - consumed;
       // Exporters buy up surplus that would push the price below the floor.
       const floorStock = stockForRelPrice(town, g.id, ECON.priceFloor);

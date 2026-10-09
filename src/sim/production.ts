@@ -5,6 +5,7 @@ import type { Building, GameState } from './state';
 import type { Sim } from './sim';
 import { extract, harvest, resourceSiteFactor } from './resources';
 import { techLabor, techOutput } from './tech';
+import { maintenanceMultiplier } from './macro';
 import type { World } from './world/types';
 
 export const levelIndex = (b: Building) => Math.max(0, Math.min(2, b.level - 1));
@@ -24,8 +25,9 @@ export function storageCap(b: Building): number {
   return BUILDING[b.type].storage * ECON.levelWorkers[levelIndex(b)];
 }
 
-export function maintenance(b: Building): number {
-  return BUILDING[b.type].maintenance * ECON.levelMaintenance[levelIndex(b)];
+export function maintenance(b: Building, state?: GameState): number {
+  const m = state ? maintenanceMultiplier(state, b.type) * state.priceLevel : 1;
+  return BUILDING[b.type].maintenance * ECON.levelMaintenance[levelIndex(b)] * m;
 }
 
 
@@ -90,6 +92,11 @@ export function updateProduction(sim: Sim): void {
     }
     const recipe = def.recipe;
     if (!recipe) continue;
+    if (b.disabledUntil !== undefined && b.disabledUntil > state.day) {
+      b.rate = 0;
+      b.status = `Damaged: repairs (${b.disabledUntil - state.day} days)`;
+      continue;
+    }
     if (def.site.kind === 'forest' || def.site.kind === 'fish' || def.site.kind === 'deposit')
       b.siteFactor = resourceSiteFactor(state, sim.world, def, b.x, b.y);
     let out = potentialOutput(state, b);
