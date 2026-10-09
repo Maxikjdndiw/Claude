@@ -1,38 +1,30 @@
 import type { Game } from '../../game';
 import { useStore } from '../store';
+import { BuildMenu, PlacementHint } from '../panels/BuildMenu';
+import { BuildingPanel } from '../panels/BuildingPanel';
+import { ErrorFlash, GameOver, NewsPanel, Toasts } from '../panels/Feed';
+import { FinancePanel } from '../panels/FinancePanel';
+import { TopBar } from '../panels/TopBar';
+import { TownPanel } from '../panels/TownPanel';
 
-/** In-game HUD. Milestone 1: top bar shell; the simulation arrives in milestone 2. */
+/** In-game HUD. */
 export function Playing({ game }: { game: Game }) {
-  useStore(game.ui, (s) => s.tick);
-  const showRes = useStore(game.ui, (s) => s.showResources);
-  const st = game.state!;
+  const left = useStore(game.ui, (s) => s.leftPanel);
+  const selB = useStore(game.ui, (s) => s.selectedBuilding);
+  const selT = useStore(game.ui, (s) => s.selectedTown);
+  const building = useStore(game.ui, (s) => s.buildType);
   return (
     <>
-      <header class="topbar panel">
-        <div class="tb-company">
-          <span class="brand-mark sm">◆</span>
-          <b>{st.companyName}</b>
-        </div>
-        <div class="tb-stat">
-          <span>Cash</span>
-          <b>$50,000</b>
-        </div>
-        <div class="tb-stat">
-          <span>Date</span>
-          <b>Jan 1, 2000</b>
-        </div>
-        <div class="tb-stat">
-          <span>Company value</span>
-          <b>$50,000</b>
-        </div>
-        <div class="tb-spacer" />
-        <button class={`btn small ${showRes ? 'on' : ''}`} onClick={() => game.toggleResources()}>
-          ◈ Resources
-        </button>
-        <button class="btn small ghost" onClick={() => game.backToMenu()}>
-          Menu
-        </button>
-      </header>
+      <TopBar game={game} />
+      {left === 'finance' && <FinancePanel game={game} />}
+      {left === 'log' && <NewsPanel game={game} />}
+      {building && <PlacementHint game={game} />}
+      {!building && selB !== null && <BuildingPanel game={game} />}
+      {!building && selB === null && selT !== null && <TownPanel game={game} />}
+      <BuildMenu game={game} />
+      <Toasts game={game} />
+      <ErrorFlash game={game} />
+      <GameOver game={game} />
     </>
   );
 }

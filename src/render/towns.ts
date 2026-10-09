@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import { BIOMES, BIOME_IDS } from '../data/biomes';
 import { hash2 } from '../sim/rng';
-import { cellSlope } from '../sim/world/generate';
+import { layoutTowns } from '../sim/world/townLayout';
 import { heightAt } from '../sim/world/query';
-import type { TownSite, World } from '../sim/world/types';
+import type { World } from '../sim/world/types';
 import { buildModel, propMaterial } from './meshkit';
 
 const WALLS = ['#f4efe6', '#f1e2cc', '#efd4c4', '#dfe8ec', '#e9e3f0', '#f6ead0'];
@@ -23,15 +22,10 @@ const tmpP = new THREE.Vector3();
 const tmpS = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
-export interface TownLayout {
-  town: TownSite;
-  cells: number[];
-}
 
 /** Procedural little towns: clusters of houses that grow with population. */
 export class TownsView {
   readonly group = new THREE.Group();
-  readonly layouts: TownLayout[] = [];
   private houses!: THREE.InstancedMesh;
   private roofs!: THREE.InstancedMesh;
   private towers!: THREE.InstancedMesh;
@@ -40,9 +34,8 @@ export class TownsView {
     this.rebuild(world.towns);
   }
 
-  rebuild(towns: TownSite[]): void {
+  rebuild(towns: { id: number; x: number; y: number; population: number }[]): void {
     this.group.clear();
-    this.layouts.length = 0;
     const w = this.world;
     const houseM: THREE.Matrix4[] = [];
     const houseC: THREE.Color[] = [];
@@ -50,33 +43,12 @@ export class TownsView {
     const roofC: THREE.Color[] = [];
     const towerM: THREE.Matrix4[] = [];
     const towerC: THREE.Color[] = [];
-    const used = new Set<number>();
 
+    const layouts = layoutTowns(w, towns);
     for (const t of towns) {
-      const target = Math.round(6 + Math.sqrt(t.population) * 0.45);
+      const cells = layouts.find((l) => l.town === t.id)!.cells;
+      const target = cells.length;
       const towers = t.population > 12000 ? Math.round((t.population - 12000) / 2500) + 2 : 0;
-      const cells: number[] = [];
-      // Spiral outwards from the center, picking buildable cells.
-      for (let r = 0; r < 14 && cells.length < target; r++) {
-        for (let oy = -r; oy <= r; oy++) {
-          for (let ox = -r; ox <= r; ox++) {
-            if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
-            const x = t.x + ox;
-            const y = t.y + oy;
-            if (x < 1 || y < 1 || x >= w.size - 1 || y >= w.size - 1) continue;
-            const c = y * w.size + x;
-            if (used.has(c)) continue;
-            const b = BIOME_IDS[w.biome[c]];
-            if (!BIOMES[b].buildable || cellSlope(w, x, y) > 1) continue;
-            // Leave some gaps for streets.
-            if ((ox + oy) % 3 === 0 && r > 0 && hash2(x, y, 31) < 0.6) continue;
-            if (cells.length >= target) break;
-            cells.push(c);
-            used.add(c);
-          }
-        }
-      }
-      this.layouts.push({ town: t, cells });
       cells.forEach((c, i) => {
         const x = c % w.size;
         const y = (c / w.size) | 0;
