@@ -1,4 +1,4 @@
-import { emit } from './events';
+import { emit, learn } from './events';
 import { book, companyAssets, debtOf, operatingProfit, trailing } from './finance';
 import type { Company, GameState, Loan } from './state';
 
@@ -91,6 +91,11 @@ export function takeLoan(
   state.loans.push(loan);
   c.cash += amount;
   c.cashflow.financing += amount;
+  if (owner === 0) learn(
+    state,
+    'credit-rating',
+    `Your credit rating is ${r.grade}, so the bank charges the central bank rate ${(state.macro.baseRate * 100).toFixed(2)}% plus a ${(r.spread * 100).toFixed(1)}% risk spread. More debt or weaker profits would make the next loan dearer.`,
+  );
   emit(state, 'info', `Borrowed $${amount.toLocaleString()} at ${(loan.rate * 100).toFixed(2)}% (${variable ? 'variable' : 'fixed'}, ${months} months).`, {
     concept: 'interest',
     owner,

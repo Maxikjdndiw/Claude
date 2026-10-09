@@ -18,6 +18,9 @@ import { updateMacroDaily, updateMacroMonthly } from './macro';
 import { runEvents } from './eventsys';
 import { serviceLoans } from './bank';
 import { earningsReaction, governance, updateStocks } from './stocks';
+import { detectConcepts } from './learning';
+import { marketShares } from './ai';
+import { GOODS } from '../data/goods';
 
 /** Simulation context: static world + mutable state + derived caches. */
 export class Sim {
@@ -66,11 +69,27 @@ export class Sim {
       earningsReaction(s);
       governance(this);
       botsMonthly(this);
+      this.recordStats();
       if (updateTowns(s)) {
         this.occ.rebuild(s);
         this.townsDirty = true;
       }
     }
+    if (s.day % 5 === 0) detectConcepts(this);
     s.rng = this.rng.state;
+  }
+
+  /** Monthly market share snapshot for charts. */
+  private recordStats(): void {
+    const s = this.state;
+    const shares: Record<string, Record<number, number>> = {};
+    for (const g of GOODS) {
+      const sh = marketShares(s, g.id);
+      const row: Record<number, number> = {};
+      for (const [k, v] of sh) if (v > 0.001) row[k] = Math.round(v * 1000) / 1000;
+      shares[g.id] = row;
+    }
+    s.stats.push({ day: s.day, shares });
+    if (s.stats.length > 240) s.stats.shift();
   }
 }

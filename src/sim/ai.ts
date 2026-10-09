@@ -6,7 +6,7 @@ import { GOOD } from '../data/goods';
 import { COMPANY_NAMES } from '../data/names';
 import { TECHS } from '../data/techs';
 import * as cmd from './commands';
-import { emit } from './events';
+import { emit, learn } from './events';
 import { debtOf, fundamentalValue, netProfit } from './finance';
 import { creditLimit, repayLoan, takeLoan } from './bank';
 import { buyQuote, buyShares, ipo, ipoCheck, listed } from './stocks';
@@ -248,6 +248,13 @@ function considerExpansion(sim: Sim, c: Company): void {
   if (!res.ok || !res.building) return;
   const b = res.building;
   const def = BUILDING[best.type];
+  const outGood = Object.keys(def.recipe!.outputs)[0];
+  if (best.town && (best.town.market[outGood].share[0] ?? 0) > 0.05)
+    learn(
+      state,
+      'competition',
+      `${c.name} is building a ${def.name} to sell ${GOOD[outGood].name.toLowerCase()} in ${best.town.name}, where you already have ${Math.round((best.town.market[outGood].share[0] ?? 0) * 100)}% of the market. More supply will push the price down for both of you.`,
+    );
   emit(state, 'info', `${c.name} is building a ${def.name} near ${best.town?.name ?? 'the wilds'}.`, {
     concept: best.town && best.town.market[Object.keys(def.recipe!.outputs)[0]].price > GOOD[Object.keys(def.recipe!.outputs)[0]].basePrice * 1.1 ? 'market-entry' : 'competition',
     at: { x: b.x, y: b.y },

@@ -65,6 +65,6 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyDef> = {
   hard: { name: 'Hard', bots: 4, cash: 1.6, thinkDays: 7, noise: 0.05 },
 };
 
-export const BOT_COLORS = ['#c0563b', '#7b5ea7', '#d39b2a', '#4f8a3a', '#3b6fc0'];
+export const BOT_COLORS = ['#d0542a', '#6f4fb5', '#c98500', '#2e7d32', '#2a78d6'];
 
 export const SPECIALTIES: Category[] = ['food', 'forestry', 'mining', 'industry'];

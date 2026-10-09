@@ -10,7 +10,7 @@ import { Sim } from './sim';
 import { generateCountryRoads } from './roads';
 import { DIFFICULTIES, type Difficulty } from '../data/ai';
 
-export const PLAYER_COLOR = '#2f7f8f';
+export const PLAYER_COLOR = '#008aa0';
 
 /** Create a fresh game state for a generated world. */
 export function createGame(world: World, companyName: string): GameState {
@@ -38,6 +38,8 @@ export function createGame(world: World, companyName: string): GameState {
     log: [],
     gameOver: null,
     settings: { difficulty: 'normal', bots: 3 },
+    learning: { seen: {}, queue: [] },
+    stats: [],
   };
   const maxPop = Math.max(...world.towns.map((t) => t.population));
   for (const site of world.towns) {

@@ -10,6 +10,8 @@ import { LineDialog, LinesPanel, ToolHint } from '../panels/Transport';
 import { ResearchPanel } from '../panels/Research';
 import { RivalsPanel } from '../panels/Rivals';
 import { BankPanel, EconomyPanel, StocksPanel } from '../panels/Markets';
+import { GlossaryPanel, LessonCard } from '../panels/Learn';
+import { ChartsPanel } from '../panels/Charts';
 
 /** In-game HUD. */
 export function Playing({ game }: { game: Game }) {
@@ -28,6 +30,8 @@ export function Playing({ game }: { game: Game }) {
       {left === 'economy' && <EconomyPanel game={game} />}
       {left === 'bank' && <BankPanel game={game} />}
       {left === 'stocks' && <StocksPanel game={game} />}
+      {left === 'learn' && <GlossaryPanel game={game} />}
+      {left === 'charts' && <ChartsPanel game={game} />}
       <ToolHint game={game} />
       {building && <PlacementHint game={game} />}
       {!building && selB !== null && <BuildingPanel game={game} />}
@@ -35,6 +39,7 @@ export function Playing({ game }: { game: Game }) {
       <BuildMenu game={game} />
       <Toasts game={game} />
       <ErrorFlash game={game} />
+      <LessonCard game={game} />
       <LineDialog game={game} />
       <GameOver game={game} />
     </>

@@ -1,7 +1,7 @@
 import { BIOMES, BIOME_IDS } from '../data/biomes';
 import { BUILDING } from '../data/buildings';
 import { ECON } from '../data/economy';
-import { emit } from './events';
+import { emit, learn } from './events';
 import { book, invest } from './finance';
 import { laborTownFor } from './labor';
 import { center, distance } from './logistics';
@@ -131,9 +131,14 @@ export function build(sim: Sim, owner: number, type: string, x: number, y: numbe
   sim.occ.mark(b.id, type, x, y);
   const [fw, fh] = def.footprint;
   sim.terrainDirty.push(flattenFootprint(sim.world, state, x, y, fw, fh));
-  if (type !== 'hq') {
+  if (type !== 'hq' && owner === 0) {
+    learn(
+      state,
+      'opportunity-cost',
+      `You put $${chk.cost.toLocaleString()} into a ${def.name}. Kept in a deposit at ${(ECON.depositRate * 100).toFixed(0)}% it would earn $${Math.round(chk.cost * ECON.depositRate).toLocaleString()} a year with no risk. The ${def.name} has to beat that.`,
+    );
     emit(state, 'info', `Construction of a ${def.name} started (${def.buildDays} days, $${chk.cost.toLocaleString()}).`, {
-      concept: 'fixed-costs',
+      concept: 'opportunity-cost',
       at: { x, y },
       owner,
     });

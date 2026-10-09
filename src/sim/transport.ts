@@ -1,7 +1,7 @@
 import { BUILDING } from '../data/buildings';
 import { GOOD } from '../data/goods';
 import { INFRA, MODE_VEHICLE, VEHICLES } from '../data/transport';
-import { emit } from './events';
+import { emit, learn } from './events';
 import { book, invest } from './finance';
 import { buyable, buyFromMarket, sellToMarket } from './market';
 import { pathLength } from './pathfinding';
@@ -129,6 +129,15 @@ export function createLine(
   };
   for (let i = 0; i < vehicles; i++) line.vehicles.push(newVehicle());
   state.lines.push(line);
+  if (owner === 0 && from.kind === 'town' && to.kind === 'town') {
+    const a = state.towns[from.id].market[good].price;
+    const b = state.towns[to.id].market[good].price;
+    learn(
+      state,
+      'arbitrage',
+      `You buy ${GOOD[good].name.toLowerCase()} in ${state.towns[from.id].name} at $${a.toFixed(0)} and sell it in ${state.towns[to.id].name} at $${b.toFixed(0)}. Your buying will push the first price up and your selling the second one down, until the gap only just covers transport.`,
+    );
+  }
   emit(state, 'info', `New ${v.name.toLowerCase()} line: ${GOOD[good].name} from ${endpointName(state, from)} to ${endpointName(state, to)}.`, {
     concept: 'transport-costs',
     owner,

@@ -14,6 +14,7 @@ import { pitRadius, survey } from './sim/resources';
 import { isUnlocked } from './sim/tech';
 import { INFRA } from './data/transport';
 import { spawnBots } from './sim/ai';
+import { learn } from './sim/events';
 import type { Difficulty } from './data/ai';
 import { layoutTowns } from './sim/world/townLayout';
 import { generateWorld } from './sim/world/generate';
@@ -22,7 +23,7 @@ import type { World } from './sim/world/types';
 import { Store } from './ui/store';
 
 export type Screen = 'menu' | 'pickStart' | 'playing';
-export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research' | 'rivals' | 'economy' | 'bank' | 'stocks';
+export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research' | 'rivals' | 'economy' | 'bank' | 'stocks' | 'learn' | 'charts';
 export type Tool = null | 'road' | 'rail' | 'line' | 'survey';
 
 export const START_RADIUS = 14;
@@ -62,6 +63,9 @@ export interface UIState {
   roadPlan: RoadPlan | null;
   lineFrom: Endpoint | null;
   lineDraft: { from: Endpoint; to: Endpoint } | null;
+  /** Show economics pop-ups. */
+  tips: boolean;
+  glossaryFocus: string | null;
 }
 
 /** Turns a free-text seed into a number ("42" -> 42, "harbor" -> hash). */
@@ -73,6 +77,14 @@ export function parseSeed(text: string): number {
 
 export function randomSeedText(): string {
   return String(Math.floor(Math.random() * 1e6));
+}
+
+function loadTips(): boolean {
+  try {
+    return localStorage.getItem('tycoon.tips') !== 'off';
+  } catch {
+    return true;
+  }
 }
 
 /** Top-level controller: connects simulation, renderer and UI. */
@@ -112,6 +124,8 @@ export class Game {
       roadPlan: null,
       lineFrom: null,
       lineDraft: null,
+      tips: loadTips(),
+      glossaryFocus: null,
     });
     this.view.rig.onClick = (e) => this.onMapClick(e);
     this.view.dom.addEventListener('pointermove', (e) => this.onMapHover(e));
@@ -201,6 +215,12 @@ export class Game {
       return;
     }
     spawnBots(this.sim);
+    const near = sel.towns[0];
+    learn(
+      this.sim.state,
+      'comparative-location',
+      `You chose a ${BIOMES[sel.biome].name.toLowerCase()} site ${near ? `${near.distance.toFixed(0)} km from ${near.town.name}` : ''}. ${sel.strengths.slice(0, 2).join('. ')}. Location decides your costs for years to come.`,
+    );
     this.view.overlays!.cursor.visible = false;
     this.view.overlays!.selection.visible = false;
     this.view.rig.focus(sel.x + 0.5, sel.y + 0.5, 60);
@@ -527,6 +547,15 @@ export class Game {
     const [w, h] = BUILDING[b.type].footprint;
     this.view.rig.focus(b.x + w / 2, b.y + h / 2);
     this.selectBuilding(id);
+  }
+
+  setTips(on: boolean): void {
+    try {
+      localStorage.setItem('tycoon.tips', on ? 'on' : 'off');
+    } catch {
+      /* storage unavailable */
+    }
+    this.ui.set({ tips: on });
   }
 
   setLeftPanel(p: LeftPanel): void {
