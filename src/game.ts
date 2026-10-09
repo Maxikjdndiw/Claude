@@ -1,0 +1,763 @@
+import * as THREE from 'three';
+import { BIOMES } from './data/biomes';
+import { BUILDING } from './data/buildings';
+import { BuildingsView } from './render/buildings';
+import { View } from './render/view';
+import * as cmd from './sim/commands';
+import { TOWN_CELL } from './sim/grid';
+import { hashString } from './sim/rng';
+import { applyScenario, startNewGame } from './sim/setup';
+import { SCENARIO } from './data/scenarios';
+import { loadState, saveGame } from './save';
+import { isMonthStart } from './sim/time';
+import { Sim } from './sim/sim';
+import type { Endpoint, GameEvent, GameState } from './sim/state';
+import { buildRoad, planRoad, type RoadPlan, type TrackMode } from './sim/roads';
+import { pitRadius, survey } from './sim/resources';
+import { isUnlocked } from './sim/tech';
+import { INFRA } from './data/transport';
+import { spawnBots } from './sim/ai';
+import { learn } from './sim/events';
+import type { Difficulty } from './data/ai';
+import { layoutTowns } from './sim/world/townLayout';
+import { generateWorld } from './sim/world/generate';
+import { analyzeSite, biomeOf, heightAt, type SiteAnalysis } from './sim/world/query';
+import type { World } from './sim/world/types';
+import { Store } from './ui/store';
+
+export type Screen = 'menu' | 'pickStart' | 'playing';
+export type LeftPanel = null | 'finance' | 'log' | 'lines' | 'research' | 'rivals' | 'economy' | 'bank' | 'stocks' | 'learn' | 'charts';
+export type Tool = null | 'road' | 'rail' | 'line' | 'survey';
+
+export const START_RADIUS = 14;
+/** Real seconds per simulated day at 1x speed. */
+export const DAY_SECONDS = 1;
+
+export interface Toast extends GameEvent {
+  id: number;
+  born: number;
+}
+
+export interface Placement extends cmd.PlacementCheck {
+  type: string;
+  x: number;
+  y: number;
+}
+
+export interface UIState {
+  screen: Screen;
+  seedText: string;
+  companyName: string;
+  hover: SiteAnalysis | null;
+  selected: SiteAnalysis | null;
+  showResources: boolean;
+  /** Bumped whenever simulation state changes (UI re-reads `game.state`). */
+  tick: number;
+  speed: number;
+  buildType: string | null;
+  placement: Placement | null;
+  selectedBuilding: number | null;
+  selectedTown: number | null;
+  leftPanel: LeftPanel;
+  toasts: Toast[];
+  error: string | null;
+  tool: Tool;
+  roadStart: number | null;
+  roadPlan: RoadPlan | null;
+  lineFrom: Endpoint | null;
+  lineDraft: { from: Endpoint; to: Endpoint } | null;
+  /** Show economics pop-ups. */
+  tips: boolean;
+  glossaryFocus: string | null;
+  menuOpen: boolean;
+  /** Current tutorial step, or null when not in the tutorial. */
+  tutorial: number | null;
+  /** Achievements unlocked in any game (persisted in the browser). */
+  trophies: string[];
+}
+
+/** Turns a free-text seed into a number ("42" -> 42, "harbor" -> hash). */
+export function parseSeed(text: string): number {
+  const t = text.trim();
+  if (/^\d+$/.test(t)) return Number(t) >>> 0;
+  return hashString(t || 'tycoon');
+}
+
+export function randomSeedText(): string {
+  return String(Math.floor(Math.random() * 1e6));
+}
+
+function loadTrophies(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem('tycoon.achievements') ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+function loadTips(): boolean {
+  try {
+    return localStorage.getItem('tycoon.tips') !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/** Top-level controller: connects simulation, renderer and UI. */
+export class Game {
+  readonly ui: Store<UIState>;
+  readonly view: View;
+  world: World | null = null;
+  sim: Sim | null = null;
+  buildingsView: BuildingsView | null = null;
+  private ghost: THREE.Group | null = null;
+  private lastHover = '';
+  private acc = 0;
+  private toastId = 0;
+  private lastSpeed = 1;
+  private prevForest = new Set<number>();
+  private lastAutosave = -1;
+
+  constructor(viewport: HTMLElement) {
+    this.view = new View(viewport);
+    this.ui = new Store<UIState>({
+      screen: 'menu',
+      seedText: randomSeedText(),
+      companyName: 'Evergreen Industries',
+      hover: null,
+      selected: null,
+      showResources: true,
+      tick: 0,
+      speed: 1,
+      buildType: null,
+      placement: null,
+      selectedBuilding: null,
+      selectedTown: null,
+      leftPanel: null,
+      toasts: [],
+      error: null,
+      tool: null,
+      roadStart: null,
+      roadPlan: null,
+      lineFrom: null,
+      lineDraft: null,
+      tips: loadTips(),
+      glossaryFocus: null,
+      menuOpen: false,
+      tutorial: null,
+      trophies: loadTrophies(),
+    });
+    this.view.rig.onClick = (e) => this.onMapClick(e);
+    this.view.dom.addEventListener('pointermove', (e) => this.onMapHover(e));
+    this.view.dom.addEventListener('contextmenu', () => {
+      this.cancelBuild();
+      if (this.ui.state.tool) this.setTool(null);
+    });
+    this.view.onFrame = (dt) => this.frame(dt);
+    window.addEventListener('keydown', (e) => this.onKey(e));
+    this.loadMenuBackdrop();
+  }
+
+  get state(): GameState | null {
+    return this.sim?.state ?? null;
+  }
+
+  // ---------------------------------------------------------------- menu
+
+  /** A slowly rotating world behind the main menu. */
+  private loadMenuBackdrop(): void {
+    this.setWorld(generateWorld(parseSeed(this.ui.state.seedText)));
+    this.view.overlays!.markersVisible = false;
+    this.view.labelsVisible = false;
+    this.view.rig.setView(0.6, 0.75, this.world!.size * 1.05, true);
+    this.view.rig.autoRotate = 0.05;
+    this.view.rig.enabled = false;
+  }
+
+  private setWorld(world: World): void {
+    this.world = world;
+    this.view.setWorld(world);
+    this.buildingsView = new BuildingsView(world);
+    this.view.mapRoot.add(this.buildingsView.group);
+    this.view.towns!.rebuild(world.towns, layoutTowns(world, world.towns));
+  }
+
+  previewSeed(seedText: string): void {
+    this.ui.set({ seedText });
+    this.setWorld(generateWorld(parseSeed(seedText)));
+    this.view.overlays!.markersVisible = false;
+    this.view.labelsVisible = false;
+  }
+
+  /** Main menu -> pick a start location on the generated map. */
+  newGame(seedText: string, companyName: string, difficulty: Difficulty = 'normal', scenario?: string): void {
+    const sc = scenario ? SCENARIO[scenario] : undefined;
+    if (sc) {
+      seedText = sc.seed;
+      difficulty = sc.difficulty;
+    }
+    const seed = parseSeed(seedText);
+    // Always regenerate: the previous game may have edited the terrain.
+    this.setWorld(generateWorld(seed));
+    this.sim = startNewGame(this.world!, companyName.trim() || 'Evergreen Industries', difficulty);
+    if (sc) applyScenario(this.sim, sc.id);
+    const state = this.sim.state;
+    const v = this.view;
+    v.rig.autoRotate = 0;
+    v.rig.enabled = true;
+    v.rig.setView(0.5, 1.05, this.world!.size * 1.0);
+    v.rig.focus(this.world!.size / 2, this.world!.size / 2);
+    v.overlays!.setDeposits(state.deposits);
+    v.overlays!.markersVisible = this.ui.state.showResources;
+    v.labelsVisible = true;
+    this.afterChange();
+    this.ui.set({ screen: 'pickStart', seedText, companyName, hover: null, selected: null });
+  }
+
+  /** Select a start site. Returns false if the cell is not buildable. */
+  selectStart(cx: number, cy: number): boolean {
+    if (!this.world || !this.state) return false;
+    if (!BIOMES[biomeOf(this.world, cx, cy)].buildable) return false;
+    if (this.sim!.occ.at(cx, cy) !== 0) return false;
+    this.view.overlays!.placeSelection(cx + 0.5, cy + 0.5, START_RADIUS);
+    this.ui.set({ selected: analyzeSite(this.world, cx, cy, START_RADIUS, this.state.deposits) });
+    return true;
+  }
+
+  /** Test hook: select the nearest buildable cell around (x, y). */
+  debugSelectStart(x: number, y: number): boolean {
+    for (let r = 0; r < 10; r++)
+      for (let oy = -r; oy <= r; oy++)
+        for (let ox = -r; ox <= r; ox++) if (this.selectStart(x + ox, y + oy)) return true;
+    return false;
+  }
+
+  confirmStart(): void {
+    const sel = this.ui.state.selected;
+    if (!sel || !this.sim) return;
+    const res = cmd.foundCompany(this.sim, 0, sel.x, sel.y);
+    if (!res.ok) {
+      this.flashError(res.reason ?? 'Cannot found company here');
+      return;
+    }
+    spawnBots(this.sim);
+    const near = sel.towns[0];
+    learn(
+      this.sim.state,
+      'comparative-location',
+      `You chose a ${BIOMES[sel.biome].name.toLowerCase()} site ${near ? `${near.distance.toFixed(0)} km from ${near.town.name}` : ''}. ${sel.strengths.slice(0, 2).join('. ')}. Location decides your costs for years to come.`,
+    );
+    this.view.overlays!.cursor.visible = false;
+    this.view.overlays!.selection.visible = false;
+    this.view.rig.focus(sel.x + 0.5, sel.y + 0.5, 60);
+    this.view.rig.setView(0.6, 0.85, 60);
+    this.afterChange();
+    this.ui.set({ screen: 'playing', hover: null, speed: 1 });
+  }
+
+  backToMenu(): void {
+    this.sim = null;
+    this.cancelBuild();
+    this.view.overlays!.cursor.visible = false;
+    this.view.overlays!.selection.visible = false;
+    this.ui.set({
+      screen: 'menu',
+      menuOpen: false,
+      tutorial: null,
+      hover: null,
+      selected: null,
+      selectedBuilding: null,
+      selectedTown: null,
+      leftPanel: null,
+      toasts: [],
+    });
+    this.loadMenuBackdrop();
+  }
+
+  saveTo(slot: string): void {
+    if (!this.sim) return;
+    const res = saveGame(slot, this.sim.state);
+    if (res.ok) this.ui.set({ toasts: [...this.ui.state.toasts, { day: this.sim.state.day, kind: 'good', text: `Game saved${slot === 'auto' ? '' : ` to slot ${slot}`}.`, id: ++this.toastId, born: performance.now() }] });
+    else this.flashError(res.reason ?? 'Could not save');
+  }
+
+  loadFrom(slot: string): boolean {
+    const { state, reason } = loadState(slot);
+    if (!state) {
+      this.flashError(reason ?? 'Could not load');
+      return false;
+    }
+    this.cancelBuild();
+    const world = generateWorld(state.seed);
+    this.sim = new Sim(world, state); // re-applies terrain edits
+    this.setWorld(world);
+    const v = this.view;
+    v.rig.autoRotate = 0;
+    v.rig.enabled = true;
+    v.overlays!.setDeposits(state.deposits);
+    v.overlays!.markersVisible = this.ui.state.showResources;
+    v.labelsVisible = true;
+    this.prevForest = new Set();
+    this.markPits();
+    v.terrain?.updateRegion(0, 0, world.size, world.size);
+    for (const b of state.buildings) {
+      const [w, h] = BUILDING[b.type].footprint;
+      const cells: number[] = [];
+      for (let y = b.y - 1; y <= b.y + h; y++) for (let x = b.x - 1; x <= b.x + w; x++) cells.push(y * world.size + x);
+      v.props?.clearCells(cells);
+    }
+    const hq = state.companies[0].hq ?? { x: world.size / 2, y: world.size / 2 };
+    v.rig.focus(hq.x + 1, hq.y + 1, 60, true);
+    v.rig.setView(0.6, 0.85, 60, true);
+    this.lastAutosave = state.day;
+    this.ui.set({ screen: 'playing', speed: 0, menuOpen: false, selectedBuilding: null, selectedTown: null, leftPanel: null, toasts: [], companyName: state.companies[0].name });
+    this.afterChange();
+    return true;
+  }
+
+  startTutorial(companyName: string): void {
+    this.newGame('42', companyName, 'easy');
+    this.ui.set({ tutorial: 0, tips: true });
+  }
+
+  /** Keep playing after a scenario ended (win or loss). */
+  continueAfterScenario(): void {
+    if (!this.sim) return;
+    this.sim.state.gameOver = null;
+    this.sim.state.scenario = undefined;
+    this.afterChange();
+  }
+
+  setMenu(open: boolean): void {
+    if (open) this.setSpeed(0);
+    this.ui.set({ menuOpen: open });
+  }
+
+  toggleResources(): void {
+    const show = !this.ui.state.showResources;
+    if (this.view.overlays) this.view.overlays.markersVisible = show;
+    this.ui.set({ showResources: show });
+  }
+
+  // ---------------------------------------------------------------- time
+
+  setSpeed(speed: number): void {
+    if (speed > 0) this.lastSpeed = speed;
+    this.ui.set({ speed });
+  }
+
+  togglePause(): void {
+    this.setSpeed(this.ui.state.speed === 0 ? this.lastSpeed : 0);
+  }
+
+  private frame(dt: number): void {
+    const s = this.ui.state;
+    this.buildingsView?.update(dt, s.speed);
+    if (this.sim) this.view.vehicles?.update(this.sim.state, Math.min(1, this.acc), this.sim.state.companies.map((c) => c.color));
+    if (s.screen !== 'playing' || !this.sim || s.speed === 0 || this.sim.state.gameOver) return;
+    this.acc += (dt * s.speed) / DAY_SECONDS;
+    let steps = 0;
+    while (this.acc >= 1 && steps < 8) {
+      this.sim.step();
+      this.acc -= 1;
+      steps++;
+    }
+    if (steps) this.afterChange();
+  }
+
+  /** Advance N days immediately (tests, debugging). */
+  advance(days: number): void {
+    if (!this.sim) return;
+    for (let i = 0; i < days; i++) this.sim.step();
+    this.afterChange();
+  }
+
+  /** Push simulation changes to the renderer and UI. */
+  afterChange(): void {
+    const sim = this.sim;
+    if (!sim) return;
+    const v = this.view;
+    if (sim.terrainDirty.length) {
+      this.markPits();
+      for (const r of sim.terrainDirty) {
+        v.terrain?.updateRegion(r.x0, r.y0, r.x1, r.y1);
+        const cells: number[] = [];
+        for (let y = r.y0 - 1; y <= r.y1; y++)
+          for (let x = r.x0 - 1; x <= r.x1; x++)
+            if (x >= 0 && y >= 0 && x < sim.world.size && y < sim.world.size) cells.push(y * sim.world.size + x);
+        v.props?.clearCells(cells);
+      }
+      sim.terrainDirty = [];
+    }
+    if (sim.roadsDirty) {
+      v.roads?.rebuild(sim.state.roads, sim.state.rails);
+      v.props?.clearCells([...sim.state.roads, ...sim.state.rails]);
+      sim.roadsDirty = false;
+    }
+    if (sim.forestDirty) {
+      const now = new Set(Object.keys(sim.state.fields.forest).map(Number));
+      for (const c of now) v.props?.setDensity(c, sim.state.fields.forest[c], sim.world.forest[c]);
+      for (const c of this.prevForest) if (!now.has(c)) v.props?.setDensity(c, sim.world.forest[c], sim.world.forest[c]);
+      this.prevForest = now;
+      sim.forestDirty = false;
+    }
+    if (sim.depositsDirty) {
+      v.overlays?.setDeposits(sim.state.deposits);
+      sim.depositsDirty = false;
+    }
+    if (sim.townsDirty) {
+      v.towns?.rebuild(sim.state.towns, sim.occ.layouts);
+      sim.townsDirty = false;
+    }
+    v.updateTownLabels(sim.state.towns);
+    this.buildingsView?.sync(
+      sim.state,
+      sim.state.companies.map((c) => c.color),
+    );
+    const selB = this.ui.state.selectedBuilding;
+    const b = selB !== null ? (sim.state.buildings.find((x) => x.id === selB) ?? null) : null;
+    this.buildingsView?.select(b);
+
+    const events = sim.state.events.splice(0);
+    let toasts = this.ui.state.toasts;
+    if (events.length) {
+      const now = performance.now();
+      toasts = [...toasts, ...events.map((e) => ({ ...e, id: ++this.toastId, born: now }))].slice(-5);
+    }
+    if (isMonthStart(sim.state.day) && sim.state.day !== this.lastAutosave && this.ui.state.screen === 'playing' && !sim.state.gameOver) {
+      this.lastAutosave = sim.state.day;
+      saveGame('auto', sim.state);
+    }
+    let trophies = this.ui.state.trophies;
+    if (sim.state.achievements.some((a) => !trophies.includes(a))) {
+      trophies = [...new Set([...trophies, ...sim.state.achievements])];
+      try {
+        localStorage.setItem('tycoon.achievements', JSON.stringify(trophies));
+      } catch {
+        /* storage unavailable */
+      }
+      this.ui.set({ trophies });
+    }
+    const speed = sim.state.gameOver ? 0 : this.ui.state.speed;
+    this.ui.set({ tick: this.ui.state.tick + 1, toasts, speed, selectedBuilding: b ? b.id : null });
+  }
+
+  /** Color terrain cells inside mine pits. */
+  private markPits(): void {
+    const sim = this.sim!;
+    const t = this.view.terrain;
+    if (!t) return;
+    const size = sim.world.size;
+    for (const d of sim.state.deposits) {
+      if (d.pitDepth === undefined) continue;
+      const r = pitRadius(d);
+      for (let y = Math.floor(d.y - r); y <= Math.ceil(d.y + r); y++)
+        for (let x = Math.floor(d.x - r); x <= Math.ceil(d.x + r); x++) {
+          if (x < 0 || y < 0 || x >= size || y >= size) continue;
+          if (Math.hypot(x - d.x, y - d.y) <= r - 0.3) t.dug[y * size + x] = 1;
+        }
+    }
+  }
+
+  dismissToast(id: number): void {
+    this.ui.set({ toasts: this.ui.state.toasts.filter((t) => t.id !== id) });
+  }
+
+  flashError(msg: string): void {
+    this.ui.set({ error: msg });
+    setTimeout(() => this.ui.state.error === msg && this.ui.set({ error: null }), 3000);
+  }
+
+  // ---------------------------------------------------------------- building
+
+  startBuild(type: string): void {
+    this.cancelBuild();
+    this.ghost = BuildingsView.ghost(BUILDING[type]);
+    this.ghost.visible = false;
+    this.view.mapRoot.add(this.ghost);
+    this.view.roads?.showPreview(null);
+    this.ui.set({ buildType: type, placement: null, selectedBuilding: null, selectedTown: null, tool: null, roadStart: null, lineFrom: null });
+    this.afterChange();
+  }
+
+  cancelBuild(): void {
+    if (this.ghost) this.view.mapRoot.remove(this.ghost);
+    this.ghost = null;
+    if (this.ui.state.buildType) this.ui.set({ buildType: null, placement: null });
+  }
+
+  /** Top-left footprint cell for a pointer position. */
+  private footprintAt(type: string, gx: number, gy: number): [number, number] {
+    const [w, h] = BUILDING[type].footprint;
+    return [Math.round(gx - w / 2), Math.round(gy - h / 2)];
+  }
+
+  /** Move the placement ghost to a grid position and validate it. */
+  updatePlacement(gx: number, gy: number): void {
+    const type = this.ui.state.buildType;
+    if (!type || !this.sim || !this.ghost) return;
+    const [x, y] = this.footprintAt(type, gx, gy);
+    const prev = this.ui.state.placement;
+    if (prev && prev.x === x && prev.y === y && prev.type === type) return;
+    const chk = cmd.checkPlacement(this.sim, 0, type, x, y);
+    const [w, h] = BUILDING[type].footprint;
+    this.ghost.visible = true;
+    this.ghost.position.set(x + w / 2, heightAt(this.sim.world, x + w / 2, y + h / 2) + 0.05, y + h / 2);
+    const pad = this.ghost.getObjectByName('pad') as THREE.Mesh;
+    (pad.material as THREE.MeshBasicMaterial).color.set(chk.ok ? '#5bd18b' : '#ef6b5b');
+    this.ui.set({ placement: { ...chk, type, x, y } });
+  }
+
+  /** Build at the current placement. */
+  tryBuild(): boolean {
+    const p = this.ui.state.placement;
+    if (!p || !this.sim) return false;
+    const res = cmd.build(this.sim, 0, p.type, p.x, p.y);
+    if (!res.ok) {
+      this.flashError(res.reason ?? 'Cannot build here');
+      return false;
+    }
+    this.cancelBuild();
+    this.ui.set({ selectedBuilding: res.building!.id });
+    this.afterChange();
+    return true;
+  }
+
+  // ---------------------------------------------------------------- transport tools
+
+  setTool(tool: Tool): void {
+    if (tool === 'rail' && this.state && !isUnlocked(this.state.companies[0], 'rail')) {
+      this.flashError('Research Railways first');
+      return;
+    }
+    this.cancelBuild();
+    this.view.roads?.showPreview(null);
+    this.view.overlays!.cursor.visible = false;
+    this.ui.set({
+      tool: this.ui.state.tool === tool ? null : tool,
+      roadStart: null,
+      roadPlan: null,
+      lineFrom: null,
+      selectedBuilding: null,
+      selectedTown: null,
+    });
+    this.afterChange();
+  }
+
+  /** What a click on this cell means as a line endpoint. */
+  endpointAt(cx: number, cy: number): Endpoint | null {
+    const sim = this.sim!;
+    const o = sim.occ.at(cx, cy);
+    if (o > 0) {
+      const b = sim.state.buildings.find((x) => x.id === o);
+      if (b && b.owner === 0 && b.type !== 'hq') return { kind: 'building', id: b.id };
+      return null;
+    }
+    for (const t of sim.state.towns) {
+      if (Math.hypot(t.x - cx, t.y - cy) <= (sim.occ.townRadius[t.id] ?? 4)) return { kind: 'town', id: t.id };
+    }
+    return null;
+  }
+
+  private roadClick(cell: number): void {
+    const sim = this.sim!;
+    const start = this.ui.state.roadStart;
+    if (start === null) {
+      this.ui.set({ roadStart: cell });
+      return;
+    }
+    const mode = this.trackMode();
+    const plan = planRoad(sim, start, cell, mode);
+    const res = buildRoad(sim, 0, start, cell, mode);
+    if (!res.ok) {
+      this.flashError(res.reason ?? 'Cannot build this road');
+      return;
+    }
+    this.view.roads?.showPreview(null);
+    // Chain: the next road starts where this one ended.
+    this.ui.set({ roadStart: plan ? plan.path[plan.path.length - 1] : null, roadPlan: null });
+    this.afterChange();
+  }
+
+  private roadHover(cell: number): void {
+    const start = this.ui.state.roadStart;
+    const size = this.sim!.world.size;
+    this.view.overlays!.placeCursor((cell % size) + 0.5, ((cell / size) | 0) + 0.5, 0.8, true);
+    if (start === null) return;
+    const prev = this.ui.state.roadPlan;
+    if (prev && prev.path[prev.path.length - 1] === cell) return;
+    const plan = planRoad(this.sim!, start, cell, this.trackMode());
+    this.view.roads?.showPreview(plan ? plan.path : null);
+    this.ui.set({ roadPlan: plan });
+  }
+
+  private trackMode(): TrackMode {
+    return this.ui.state.tool === 'rail' ? 'rail' : 'road';
+  }
+
+  private surveyClick(cx: number, cy: number): void {
+    const sim = this.sim!;
+    const res = survey(sim, 0, cx, cy);
+    if (!res.ok) this.flashError(res.reason ?? 'Cannot survey');
+    this.afterChange();
+  }
+
+  private lineClick(cx: number, cy: number): void {
+    const e = this.endpointAt(cx, cy);
+    if (!e) {
+      this.flashError('Click one of your buildings or a town');
+      return;
+    }
+    const from = this.ui.state.lineFrom;
+    if (!from) this.ui.set({ lineFrom: e });
+    else this.ui.set({ lineDraft: { from, to: e }, lineFrom: null, tool: null });
+  }
+
+  closeLineDraft(): void {
+    this.ui.set({ lineDraft: null });
+  }
+
+  // ---------------------------------------------------------------- commands for the UI
+
+  run(fn: (sim: Sim) => cmd.Result): void {
+    if (!this.sim) return;
+    const res = fn(this.sim);
+    if (!res.ok && res.reason) this.flashError(res.reason);
+    this.afterChange();
+  }
+
+  selectBuilding(id: number | null): void {
+    this.cancelBuild();
+    this.ui.set({ selectedBuilding: id, selectedTown: null });
+    this.afterChange();
+  }
+
+  selectTown(id: number | null): void {
+    this.cancelBuild();
+    this.ui.set({ selectedTown: id, selectedBuilding: null });
+    this.afterChange();
+    if (id !== null && this.state) {
+      const t = this.state.towns[id];
+      this.view.rig.focus(t.x + 0.5, t.y + 0.5);
+    }
+  }
+
+  focusBuilding(id: number): void {
+    const b = this.state?.buildings.find((x) => x.id === id);
+    if (!b) return;
+    const [w, h] = BUILDING[b.type].footprint;
+    this.view.rig.focus(b.x + w / 2, b.y + h / 2);
+    this.selectBuilding(id);
+  }
+
+  setTips(on: boolean): void {
+    try {
+      localStorage.setItem('tycoon.tips', on ? 'on' : 'off');
+    } catch {
+      /* storage unavailable */
+    }
+    this.ui.set({ tips: on });
+  }
+
+  setLeftPanel(p: LeftPanel): void {
+    this.ui.set({ leftPanel: this.ui.state.leftPanel === p ? null : p });
+  }
+
+  // ---------------------------------------------------------------- input
+
+  private onMapHover(e: PointerEvent): void {
+    const screen = this.ui.state.screen;
+    if (!this.world || !this.state || this.view.rig.dragging) return;
+    if (screen === 'pickStart') {
+      const p = this.view.pick(e.clientX, e.clientY);
+      if (!p) {
+        this.view.overlays!.cursor.visible = false;
+        return;
+      }
+      const ok = BIOMES[biomeOf(this.world, p.cx, p.cy)].buildable;
+      this.view.overlays!.placeCursor(p.cx + 0.5, p.cy + 0.5, START_RADIUS, ok);
+      const key = `${p.cx},${p.cy}`;
+      if (key !== this.lastHover && ok) {
+        this.lastHover = key;
+        this.ui.set({ hover: analyzeSite(this.world, p.cx, p.cy, START_RADIUS, this.state.deposits) });
+      }
+    } else if (screen === 'playing' && this.ui.state.buildType) {
+      const p = this.view.pick(e.clientX, e.clientY);
+      if (p) this.updatePlacement(p.gx, p.gy);
+    } else if (screen === 'playing' && (this.ui.state.tool === 'road' || this.ui.state.tool === 'rail')) {
+      const p = this.view.pick(e.clientX, e.clientY);
+      if (p) this.roadHover(p.cy * this.world.size + p.cx);
+    } else if (screen === 'playing' && this.ui.state.tool === 'survey') {
+      const p = this.view.pick(e.clientX, e.clientY);
+      if (p) this.view.overlays!.placeCursor(p.cx + 0.5, p.cy + 0.5, INFRA.surveyRadius, true);
+    }
+  }
+
+  private onMapClick(e: PointerEvent): void {
+    if (!this.world || !this.sim) return;
+    if (e.button === 2) return;
+    const p = this.view.pick(e.clientX, e.clientY);
+    if (!p) return;
+    const screen = this.ui.state.screen;
+    if (screen === 'pickStart') {
+      this.selectStart(p.cx, p.cy);
+      return;
+    }
+    if (screen !== 'playing') return;
+    if (this.ui.state.buildType) {
+      this.updatePlacement(p.gx, p.gy);
+      this.tryBuild();
+      return;
+    }
+    if (this.ui.state.tool === 'road' || this.ui.state.tool === 'rail') {
+      this.roadClick(p.cy * this.world.size + p.cx);
+      return;
+    }
+    if (this.ui.state.tool === 'survey') {
+      this.surveyClick(p.cx, p.cy);
+      return;
+    }
+    if (this.ui.state.tool === 'line') {
+      this.lineClick(p.cx, p.cy);
+      return;
+    }
+    const o = this.sim.occ.at(p.cx, p.cy);
+    if (o > 0) this.selectBuilding(o);
+    else if (o === TOWN_CELL) this.selectTown(this.nearestTown(p.cx, p.cy));
+    else {
+      this.ui.set({ selectedBuilding: null, selectedTown: null });
+      this.afterChange();
+    }
+  }
+
+  private nearestTown(x: number, y: number): number {
+    let best = 0;
+    let bestD = Infinity;
+    for (const t of this.sim!.state.towns) {
+      const d = Math.hypot(t.x - x, t.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = t.id;
+      }
+    }
+    return best;
+  }
+
+  private onKey(e: KeyboardEvent): void {
+    if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+    if (this.ui.state.screen !== 'playing') return;
+    if (e.key === 'Escape') {
+      if (this.ui.state.menuOpen) this.setMenu(false);
+      else if (this.ui.state.tool) this.setTool(null);
+      else if (this.ui.state.buildType) this.cancelBuild();
+      else if (this.ui.state.selectedBuilding === null && this.ui.state.selectedTown === null && !this.ui.state.leftPanel) this.setMenu(true);
+      else this.ui.set({ selectedBuilding: null, selectedTown: null, leftPanel: null });
+      this.afterChange();
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      this.togglePause();
+    } else if (e.key === '1') this.setSpeed(1);
+    else if (e.key === '2') this.setSpeed(2);
+    else if (e.key === '3') this.setSpeed(4);
+  }
+}
