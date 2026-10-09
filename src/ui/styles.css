@@ -1170,3 +1170,6 @@ input[type='range'] {
 .trophy span {
   grid-row: auto;
 }
+.confirm-back {
+  z-index: 20;
+}

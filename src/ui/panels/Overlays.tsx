@@ -41,7 +41,7 @@ export function PauseMenu({ game }: { game: Game }) {
         <div class="row wrap">
           {saves.length === 0 && <span class="muted small">No saves yet.</span>}
           {saves.map((m) => (
-            <button key={m.slot} class="btn small" onClick={() => confirm('Load this game? Unsaved progress is lost.') && game.loadFrom(m.slot)}>
+            <button key={m.slot} class="btn small" onClick={() => game.ask('Load this game? Progress since your last save is lost.', 'Load', () => game.loadFrom(m.slot))}>
               {m.slot === 'auto' ? 'Autosave' : `Slot ${m.slot}`} · {m.company} · {formatDate(m.day)}
             </button>
           ))}
@@ -63,7 +63,7 @@ export function PauseMenu({ game }: { game: Game }) {
             Show economics tips
           </label>
           <div class="row">
-            <button class="btn" onClick={() => confirm('Quit to the main menu? The game autosaves monthly.') && game.backToMenu()}>
+            <button class="btn" onClick={() => game.ask('Quit to the main menu? The game autosaves every month.', 'Quit', () => game.backToMenu())}>
               Quit to menu
             </button>
             <button class="btn primary" onClick={() => game.setMenu(false)}>

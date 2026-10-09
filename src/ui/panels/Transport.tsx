@@ -271,7 +271,7 @@ export function LinesPanel({ game }: { game: Game }) {
                 {stats.revenue > 0 ? money(profit, { sign: true }) : `cost ${money(stats.costs)}`}
               </b>
             </div>
-            <button class="link" onClick={() => confirm('Sell the vehicles and close this line?') && game.run((s) => tr.deleteLine(s, 0, l.id))}>
+            <button class="link" onClick={() => game.ask('Sell the vehicles and close this line?', 'Close line', () => game.run((s) => tr.deleteLine(s, 0, l.id)))}>
               Close line
             </button>
           </div>

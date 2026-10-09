@@ -270,7 +270,7 @@ export function BuildingPanel({ game }: { game: Game }) {
 
       {def.category !== 'hq' && (
         <div class="actions">
-          <button class="btn small danger" onClick={() => confirm(`Demolish this ${def.name}?`) && run((s) => cmd.demolish(s, 0, b.id))}>
+          <button class="btn small danger" onClick={() => game.ask(`Demolish this ${def.name}? You get back 30% of its book value.`, 'Demolish', () => run((s) => cmd.demolish(s, 0, b.id)))}>
             Demolish
           </button>
           {b.level < def.maxLevel && (

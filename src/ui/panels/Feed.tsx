@@ -79,3 +79,23 @@ export function GameOver({ game }: { game: Game }) {
     </div>
   );
 }
+
+export function ConfirmDialog({ game }: { game: Game }) {
+  const c = useStore(game.ui, (s) => s.confirm);
+  if (!c) return null;
+  return (
+    <div class="modal-back confirm-back" onClick={(e) => e.target === e.currentTarget && game.answer(false)}>
+      <div class="modal panel left-align" role="dialog" aria-modal="true">
+        <p>{c.text}</p>
+        <div class="actions">
+          <button class="btn ghost" onClick={() => game.answer(false)}>
+            Cancel
+          </button>
+          <button class="btn primary" autoFocus onClick={() => game.answer(true)}>
+            {c.action}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

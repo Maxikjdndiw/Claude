@@ -70,6 +70,8 @@ export interface UIState {
   tips: boolean;
   glossaryFocus: string | null;
   menuOpen: boolean;
+  /** Pending in-game confirmation (browser dialogs are not used). */
+  confirm: { text: string; action: string; run: () => void } | null;
   /** Current tutorial step, or null when not in the tutorial. */
   tutorial: number | null;
   /** Achievements unlocked in any game (persisted in the browser). */
@@ -144,6 +146,7 @@ export class Game {
       tips: loadTips(),
       glossaryFocus: null,
       menuOpen: false,
+      confirm: null,
       tutorial: null,
       trophies: loadTrophies(),
     });
@@ -263,6 +266,7 @@ export class Game {
     this.ui.set({
       screen: 'menu',
       menuOpen: false,
+      confirm: null,
       tutorial: null,
       hover: null,
       selected: null,
@@ -326,6 +330,17 @@ export class Game {
     this.sim.state.gameOver = null;
     this.sim.state.scenario = undefined;
     this.afterChange();
+  }
+
+  /** Ask the player to confirm a destructive action in an in-game dialog. */
+  ask(text: string, action: string, run: () => void): void {
+    this.ui.set({ confirm: { text, action, run } });
+  }
+
+  answer(yes: boolean): void {
+    const c = this.ui.state.confirm;
+    this.ui.set({ confirm: null });
+    if (yes && c) c.run();
   }
 
   setMenu(open: boolean): void {
