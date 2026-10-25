@@ -1,0 +1,13 @@
+{
+  "id": "P003",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "I walk 20 minutes to school and that's fine, so I don't really need a bike in Schleswig. And to even start I'd have to get my parents to put their card in the app, which is annoying for something I'd use maybe twice.",
+  "objection": "With only 10 bikes in town there probably won't be one near me when I actually want it, and I'd have to bug my parents to set up the payment first.",
+  "would_change_my_mind": "If I could pay myself without my parents (like PayPal, a prepaid card or a school pass) and there was always a bike at my school or the station.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.8,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

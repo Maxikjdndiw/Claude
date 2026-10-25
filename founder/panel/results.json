@@ -1,0 +1,173 @@
+{
+ "business": "Schleswig Bike Share (working name): app-based bike sharing, 10-bike pilot",
+ "seed": 492621,
+ "dealt": 20,
+ "answered": 20,
+ "skipped": [],
+ "buys": 2,
+ "passes": 18,
+ "buy_rate": 0.1,
+ "by_segment": [
+  [
+   "Young worker in their first job (amounts are in euros)",
+   3,
+   0.3333333333333333
+  ],
+  [
+   "School pupil (money is pocket money or a small side job; amounts are in euros)",
+   9,
+   0.1111111111111111
+  ],
+  [
+   "Apprentice or vocational student (amounts are in euros)",
+   5,
+   0.0
+  ],
+  [
+   "University student or volunteer-year participant (amounts are in euros)",
+   3,
+   0.0
+  ]
+ ],
+ "by_behaviour": [
+  [
+   "Trend and app user",
+   3,
+   0.3333333333333333
+  ],
+  [
+   "Bus and lifts",
+   4,
+   0.25
+  ],
+  [
+   "Owns a bike already",
+   5,
+   0.0
+  ],
+  [
+   "Tight budget",
+   3,
+   0.0
+  ],
+  [
+   "Train commuter",
+   2,
+   0.0
+  ],
+  [
+   "Walker",
+   3,
+   0.0
+  ]
+ ],
+ "by_income": [
+  [
+   "$3,000 to $11,000",
+   6,
+   0.16666666666666666
+  ],
+  [
+   "$11,000 and up",
+   8,
+   0.125
+  ],
+  [
+   "under $3,000",
+   6,
+   0.0
+  ]
+ ],
+ "why_not": [
+  [
+   "need",
+   12,
+   [
+    "I already have my own bike and I live out in the village, so the bus gets me into town and 10 bikes in town don't really help me get home. In a normal week I just wouldn't need it.",
+    "I walk 20 minutes to school and that's fine, so I don't really need a bike in Schleswig. And to even start I'd have to get my parents to put their card in the app, which is annoying for something I'd use maybe twice."
+   ],
+   [
+    "P001",
+    "P003"
+   ]
+  ],
+  [
+   "convenience",
+   3,
+   [
+    "I live out in the village and come in by bus, and the bikes are only in town, so I can't ride one home. With only 10 bikes I'd never know if one is near the bus stop, and my parents would have to set up the payment in the app anyway.",
+    "I need a bike at the station every morning at the same time, and with 10 bikes spread over the whole town I can't plan my commute around maybe finding one. I'd rather keep taking the bus or walk than risk being late for training."
+   ],
+   [
+    "P004",
+    "P008"
+   ]
+  ],
+  [
+   "timing",
+   1,
+   [
+    "It's nearly November, it rains all the time and I'm not riding much until spring anyway. If I really need a bike I'll just patch my own tyre, a tube costs about the same as one month of this."
+   ],
+   [
+    "P002"
+   ]
+  ],
+  [
+   "habit",
+   1,
+   [
+    "I already have my own bike and ride it everywhere, so I don't need to pay for someone else's. And in winter and rain I won't ride anyway, so a monthly pass makes no sense for me."
+   ],
+   [
+    "P007"
+   ]
+  ],
+  [
+   "trust",
+   1,
+   [
+    "I walk 20 minutes to school and take the bus or get a lift for everything else, so I don't really need it. With only 10 bikes in town I can't count on one being near me, and I'm not paying for something I can't rely on."
+   ],
+   [
+    "P017"
+   ]
+  ]
+ ],
+ "why_yes": [
+  [
+   "convenience",
+   2,
+   [
+    "I like trying new apps, so I'd do a ride or two at 1.50 € to get home from the old town on a weekend evening. No way I'm paying for a monthly plan, I'd barely use it.",
+    "I'd pay the 1.50 € a couple of times when I miss the bus from the station or it's running late, but I'm not signing up for 12 € a month. I've got my bus routine and I'd only use a bike when the timetable lets me down."
+   ],
+   [
+    "P006",
+    "P011"
+   ]
+  ]
+ ],
+ "flip": [
+  "If my own bike got stolen or broken, and I could pay per ride without a card my parents have to set up, I'd try a few rides.",
+  "If it's spring, my bike is still broken and the first rides are free so I can see whether a bike is actually near my school.",
+  "If I could pay myself without my parents (like PayPal, a prepaid card or a school pass) and there was always a bike at my school or the station.",
+  "A bike always waiting at the bus station, and a way to pay without my parents' card, like topping up with cash or a voucher.",
+  "If my bike got stolen or broke, I might pay 1.50 for a few rides until it's fixed, but only if a bike is actually near me when I need it.",
+  "If my own bike got broken or stolen and a bike was reliably parked at the train station in the morning, I'd pay per ride for a while.",
+  "A few bikes always parked at the train station, ideally one I can reserve in the app before I get off the train, and the 5 euro rate for apprentices too.",
+  "A bike I could reliably pick up at the bus stop and ride out to my village and leave there, paid with cash or a prepaid card without my parents.",
+  "If my own bike broke or got stolen and there was a bike reliably parked near my home and near the training hall, I'd try the 5 € pupil month.",
+  "Seeing in the app that there are bikes parked near my place and my school most of the time, so it's actually faster than walking when I'm late.",
+  "Bikes reliably parked at the bus stops in town, so I could ride the last bit when my own bike is broken or stolen.",
+  "If my own bike broke or got stolen and I needed to get somewhere quickly, I might pay 1.50 € for a single ride.",
+  "A few bikes guaranteed to be parked right at Schleswig station every morning, so I could count on one for the last stretch.",
+  "If my own bike got stolen or broke for a while, I might pay per ride instead of fixing it right away.",
+  "A bike reliably parked near my home and school, plus a promise that I don't pay if the bike is broken or won't unlock. Then I'd try a single 1.50 ride.",
+  "A bike reliably parked near my place and the bus stop, plus a free first ride, for the days I'm running late and miss the bus.",
+  "If my bike got stolen or broke, I might pay 1.50 for a single ride now and then until it's fixed.",
+  "A free trial month in spring, or a bike guaranteed near my school, so I could test it when the weather is good."
+ ],
+ "purchases_first_month_per_buyer": 2.0,
+ "price_answers": 20
+}

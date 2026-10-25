@@ -1,0 +1,13 @@
+{
+  "id": "P020",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "Schleswig is small, I walk pretty much everywhere and it costs me nothing. It's almost November, so it's going to be cold and rainy and I wouldn't ride anyway. If I really wanted a bike I'd just fix the flat on my own one.",
+  "objection": "In winter and rain I won't ride anyway, so even 5 € a month would just be gone for nothing. And with only 10 bikes there probably isn't one near me when I actually want one.",
+  "would_change_my_mind": "A free trial month in spring, or a bike guaranteed near my school, so I could test it when the weather is good.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.5,
+  "price_expensive": 1.0,
+  "price_too_expensive": 1.5
+}

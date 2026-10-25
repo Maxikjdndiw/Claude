@@ -1,0 +1,13 @@
+{
+  "id": "P002",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "timing",
+  "reason": "It's nearly November, it rains all the time and I'm not riding much until spring anyway. If I really need a bike I'll just patch my own tyre, a tube costs about the same as one month of this.",
+  "objection": "In winter and rain I won't ride anyway, and with only 10 bikes in town there probably isn't one near me when I do need it. Plus I'd have to ask my parents to OK a subscription.",
+  "would_change_my_mind": "If it's spring, my bike is still broken and the first rides are free so I can see whether a bike is actually near my school.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.8,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

@@ -1,0 +1,13 @@
+{
+  "id": "P018",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "Schleswig is small enough that I just walk, and when it's further I take the bus or get a lift. Honestly the cheaper fix is patching my own flat tyre for a few euros instead of paying per ride.",
+  "objection": "With only 10 bikes in the whole town I doubt there'd be one near me when I actually need it, so why pay for something I can't count on.",
+  "would_change_my_mind": "A bike reliably parked near my place and the bus stop, plus a free first ride, for the days I'm running late and miss the bus.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.75,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

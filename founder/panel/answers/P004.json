@@ -1,0 +1,13 @@
+{
+  "id": "P004",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "convenience",
+  "reason": "I live out in the village and come in by bus, and the bikes are only in town, so I can't ride one home. With only 10 bikes I'd never know if one is near the bus stop, and my parents would have to set up the payment in the app anyway.",
+  "objection": "The bikes stay in town but I don't. Getting my parents to add payment to an app for something I might use twice a month isn't worth the hassle.",
+  "would_change_my_mind": "A bike always waiting at the bus station, and a way to pay without my parents' card, like topping up with cash or a voucher.",
+  "price_too_cheap": 0.5,
+  "price_cheap": 1,
+  "price_expensive": 3,
+  "price_too_expensive": 6
+}

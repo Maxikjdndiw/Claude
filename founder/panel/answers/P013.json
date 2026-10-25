@@ -1,0 +1,13 @@
+{
+  "id": "P013",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "convenience",
+  "reason": "I have my own bike and I live out in the village where your bikes won't be anyway. With 10 bikes in town I can't count on one being there when I get off the bus, so I won't pay for it.",
+  "objection": "Ten bikes for the whole town means there won't be one near me when I actually need it, and none of them are out where I live.",
+  "would_change_my_mind": "Bikes reliably parked at the bus stops in town, so I could ride the last bit when my own bike is broken or stolen.",
+  "price_too_cheap": 0.5,
+  "price_cheap": 1.0,
+  "price_expensive": 2.0,
+  "price_too_expensive": 3.0
+}

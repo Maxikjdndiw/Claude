@@ -1,0 +1,13 @@
+{
+  "id": "P014",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "I already have my own bike and school is a 20-minute walk, so I'd never actually need to rent one. Paying even 5 € a month for something I already own makes no sense with my pocket money.",
+  "objection": "I already have a bike that's free to ride, so why would I pay for one? And with only 10 bikes in town there probably wouldn't even be one near me.",
+  "would_change_my_mind": "If my own bike broke or got stolen and I needed to get somewhere quickly, I might pay 1.50 € for a single ride.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.75,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

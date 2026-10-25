@@ -1,0 +1,13 @@
+{
+  "id": "P010",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "I already have my own bike, and when I can't ride it I take the bus or get a lift to training. With only 10 bikes in town I wouldn't count on one being near me in the evening anyway.",
+  "objection": "Why pay for a bike when mine is free and standing at home? With 10 bikes I'd probably have to walk to find one, and it's only worth it if it's right there when I need it.",
+  "would_change_my_mind": "If my own bike broke or got stolen and there was a bike reliably parked near my home and near the training hall, I'd try the 5 € pupil month.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.8,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

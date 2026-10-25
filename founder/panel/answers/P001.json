@@ -1,0 +1,13 @@
+{
+  "id": "P001",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "I already have my own bike and I live out in the village, so the bus gets me into town and 10 bikes in town don't really help me get home. In a normal week I just wouldn't need it.",
+  "objection": "I already have a bike, and with only 10 bikes I'd probably never find one when I need it. Also I'm not sure I count as a 'pupil' as an apprentice, and I'd have to get my parents to set up the payment in the app.",
+  "would_change_my_mind": "If my own bike got stolen or broken, and I could pay per ride without a card my parents have to set up, I'd try a few rides.",
+  "price_too_cheap": 0.5,
+  "price_cheap": 1,
+  "price_expensive": 2,
+  "price_too_expensive": 3
+}

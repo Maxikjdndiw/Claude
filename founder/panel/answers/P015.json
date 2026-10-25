@@ -1,0 +1,13 @@
+{
+  "id": "P015",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "I already have my own bike, it just has a flat tyre. Fixing it costs me a few euros once, and then I don't pay anything every month, so I'd rather do that than sign up for another app.",
+  "objection": "With only 10 bikes in the whole town, I doubt one will actually be standing at the station when my train gets in, and I can't risk being late because the app shows nothing nearby.",
+  "would_change_my_mind": "A few bikes guaranteed to be parked right at Schleswig station every morning, so I could count on one for the last stretch.",
+  "price_too_cheap": 1,
+  "price_cheap": 3,
+  "price_expensive": 8,
+  "price_too_expensive": 12
+}

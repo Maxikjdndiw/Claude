@@ -1,0 +1,13 @@
+{
+  "id": "P019",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "I already have my own bike and ride it everywhere, including to training. Paying even 5 euros a month out of my pocket money for something I don't need makes no sense.",
+  "objection": "I already have my own bike, so why would I pay for one? And with only 10 bikes in town there probably wouldn't be one near me anyway.",
+  "would_change_my_mind": "If my bike got stolen or broke, I might pay 1.50 for a single ride now and then until it's fixed.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.5,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

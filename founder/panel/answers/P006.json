@@ -1,0 +1,13 @@
+{
+  "id": "P006",
+  "buys": true,
+  "purchases_first_month": 2,
+  "reason_code": "convenience",
+  "reason": "I like trying new apps, so I'd do a ride or two at 1.50 € to get home from the old town on a weekend evening. No way I'm paying for a monthly plan, I'd barely use it.",
+  "objection": "With only 10 bikes in the whole town, there probably won't be one near me when I actually need it, and then the app is useless.",
+  "would_change_my_mind": "Seeing in the app that there are always a few bikes parked around the old town and near where I live, then I'd think about the 5 € pupil plan.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 1,
+  "price_expensive": 2,
+  "price_too_expensive": 3
+}

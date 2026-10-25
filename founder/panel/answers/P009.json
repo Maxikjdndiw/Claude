@@ -1,0 +1,13 @@
+{
+  "id": "P009",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "I come in by bus from the village and once I'm in town I just walk, it's small. Ten bikes in town don't get me home, and I'm not going to bother my parents to set up a payment for something I'd barely use.",
+  "objection": "With only 10 bikes there probably won't be one near the bus stop when I need it, and I'd still need my parents to sort out the payment in the app.",
+  "would_change_my_mind": "A bike I could reliably pick up at the bus stop and ride out to my village and leave there, paid with cash or a prepaid card without my parents.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.8,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

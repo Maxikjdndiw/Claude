@@ -1,0 +1,97 @@
+{
+ "n": 20,
+ "seed": 492621,
+ "customer": {
+  "business": "Schleswig Bike Share (working name): app-based bike sharing, 10-bike pilot",
+  "target": "Young people aged 14 to 25 living in or around Schleswig, Germany, who need to get around town without a car",
+  "where": "Schleswig, Schleswig-Holstein, Germany (a small town)",
+  "age": [
+   14,
+   25
+  ],
+  "segments": [
+   {
+    "name": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+    "share": 0.45,
+    "income": [
+     1000,
+     3000
+    ]
+   },
+   {
+    "name": "Apprentice or vocational student (amounts are in euros)",
+    "share": 0.25,
+    "income": [
+     9000,
+     14000
+    ]
+   },
+   {
+    "name": "University student or volunteer-year participant (amounts are in euros)",
+    "share": 0.15,
+    "income": [
+     8000,
+     13000
+    ]
+   },
+   {
+    "name": "Young worker in their first job (amounts are in euros)",
+    "share": 0.15,
+    "income": [
+     22000,
+     36000
+    ]
+   }
+  ],
+  "behaviours": [
+   {
+    "name": "Owns a bike already",
+    "share": 0.25,
+    "how": "Rides their own bike for most trips and only thinks about alternatives when it is broken or stolen."
+   },
+   {
+    "name": "Bus and lifts",
+    "share": 0.2,
+    "how": "Takes the bus or gets driven by parents or friends; plans trips around the timetable."
+   },
+   {
+    "name": "Walker",
+    "share": 0.15,
+    "how": "Walks most places because the town is small; rarely pays to get around."
+   },
+   {
+    "name": "Tight budget",
+    "share": 0.15,
+    "how": "Counts every euro, needs parents' OK for subscriptions, cancels anything not used weekly."
+   },
+   {
+    "name": "Trend and app user",
+    "share": 0.15,
+    "how": "Tries new apps early, has used e-scooters or bike shares in bigger cities."
+   },
+   {
+    "name": "Train commuter",
+    "share": 0.1,
+    "how": "Travels by train to school, training or work and needs to cover the last stretch."
+   }
+  ],
+  "objections": [
+   "I already have my own bike",
+   "With only 10 bikes, there won't be one near me when I need it",
+   "12 € a month is too much for how little I'd use it",
+   "My parents would have to set up the payment",
+   "What if the bike is broken or the lock doesn't open?",
+   "The town is so small I can just walk",
+   "In winter and rain I won't ride anyway"
+  ],
+  "habits": [
+   "you live in a village outside town and depend on the bus",
+   "your school is a 20-minute walk from home",
+   "you go to sports training twice a week in the evening",
+   "you meet friends in the old town on weekends",
+   "you arrive at the train station most mornings",
+   "your own bike has a flat tyre you have not fixed"
+  ]
+ },
+ "pitch": "Schleswig Bike Share (working name): a new app-based bike-sharing pilot in Schleswig with 10 bikes.\nFind a bike in the app, unlock it with your phone, ride, and leave it again when you're done.\n1.50 € per ride, or 12 € a month for unlimited rides. Pupils pay 5 € a month.\nPilot phase: 10 bikes in town. You pay in the app."
+}

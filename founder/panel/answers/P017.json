@@ -1,0 +1,13 @@
+{
+  "id": "P017",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "I walk 20 minutes to school and take the bus or get a lift for everything else, so I don't really need it. With only 10 bikes in town I can't count on one being near me, and I'm not paying for something I can't rely on.",
+  "objection": "What if I walk to a bike and it's broken, or the lock won't open with my phone? Then I've wasted time, missed my bus, and maybe still get charged.",
+  "would_change_my_mind": "A bike reliably parked near my home and school, plus a promise that I don't pay if the bike is broken or won't unlock. Then I'd try a single 1.50 ride.",
+  "price_too_cheap": 0.3,
+  "price_cheap": 0.8,
+  "price_expensive": 1.5,
+  "price_too_expensive": 2.5
+}

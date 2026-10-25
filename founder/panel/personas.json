@@ -1,0 +1,222 @@
+[
+ {
+  "id": "P001",
+  "name": "Anya",
+  "age": 19,
+  "segment": "Apprentice or vocational student (amounts are in euros)",
+  "income": 12000,
+  "behaviour": "Owns a bike already",
+  "behaviour_how": "Rides their own bike for most trips and only thinks about alternatives when it is broken or stolen.",
+  "objection": "My parents would have to set up the payment",
+  "habit": "you live in a village outside town and depend on the bus"
+ },
+ {
+  "id": "P002",
+  "name": "Tariq",
+  "age": 17,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 3000,
+  "behaviour": "Tight budget",
+  "behaviour_how": "Counts every euro, needs parents' OK for subscriptions, cancels anything not used weekly.",
+  "objection": "In winter and rain I won't ride anyway",
+  "habit": "your own bike has a flat tyre you have not fixed"
+ },
+ {
+  "id": "P003",
+  "name": "Ada",
+  "age": 17,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 2000,
+  "behaviour": "Trend and app user",
+  "behaviour_how": "Tries new apps early, has used e-scooters or bike shares in bigger cities.",
+  "objection": "My parents would have to set up the payment",
+  "habit": "your school is a 20-minute walk from home"
+ },
+ {
+  "id": "P004",
+  "name": "Esme",
+  "age": 15,
+  "segment": "Apprentice or vocational student (amounts are in euros)",
+  "income": 10000,
+  "behaviour": "Tight budget",
+  "behaviour_how": "Counts every euro, needs parents' OK for subscriptions, cancels anything not used weekly.",
+  "objection": "My parents would have to set up the payment",
+  "habit": "you live in a village outside town and depend on the bus"
+ },
+ {
+  "id": "P005",
+  "name": "Liam",
+  "age": 18,
+  "segment": "Apprentice or vocational student (amounts are in euros)",
+  "income": 11000,
+  "behaviour": "Owns a bike already",
+  "behaviour_how": "Rides their own bike for most trips and only thinks about alternatives when it is broken or stolen.",
+  "objection": "I already have my own bike",
+  "habit": "you go to sports training twice a week in the evening"
+ },
+ {
+  "id": "P006",
+  "name": "Felix",
+  "age": 24,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 3000,
+  "behaviour": "Trend and app user",
+  "behaviour_how": "Tries new apps early, has used e-scooters or bike shares in bigger cities.",
+  "objection": "12 € a month is too much for how little I'd use it",
+  "habit": "you meet friends in the old town on weekends"
+ },
+ {
+  "id": "P007",
+  "name": "Hugo",
+  "age": 14,
+  "segment": "University student or volunteer-year participant (amounts are in euros)",
+  "income": 9000,
+  "behaviour": "Owns a bike already",
+  "behaviour_how": "Rides their own bike for most trips and only thinks about alternatives when it is broken or stolen.",
+  "objection": "In winter and rain I won't ride anyway",
+  "habit": "you arrive at the train station most mornings"
+ },
+ {
+  "id": "P008",
+  "name": "Darius",
+  "age": 22,
+  "segment": "Apprentice or vocational student (amounts are in euros)",
+  "income": 14000,
+  "behaviour": "Train commuter",
+  "behaviour_how": "Travels by train to school, training or work and needs to cover the last stretch.",
+  "objection": "With only 10 bikes, there won't be one near me when I need it",
+  "habit": "you live in a village outside town and depend on the bus"
+ },
+ {
+  "id": "P009",
+  "name": "Daniel",
+  "age": 25,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 1000,
+  "behaviour": "Walker",
+  "behaviour_how": "Walks most places because the town is small; rarely pays to get around.",
+  "objection": "My parents would have to set up the payment",
+  "habit": "you live in a village outside town and depend on the bus"
+ },
+ {
+  "id": "P010",
+  "name": "Ana",
+  "age": 23,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 1000,
+  "behaviour": "Bus and lifts",
+  "behaviour_how": "Takes the bus or gets driven by parents or friends; plans trips around the timetable.",
+  "objection": "I already have my own bike",
+  "habit": "you go to sports training twice a week in the evening"
+ },
+ {
+  "id": "P011",
+  "name": "Olivia",
+  "age": 21,
+  "segment": "Young worker in their first job (amounts are in euros)",
+  "income": 25000,
+  "behaviour": "Bus and lifts",
+  "behaviour_how": "Takes the bus or gets driven by parents or friends; plans trips around the timetable.",
+  "objection": "12 € a month is too much for how little I'd use it",
+  "habit": "you arrive at the train station most mornings"
+ },
+ {
+  "id": "P012",
+  "name": "Pablo",
+  "age": 25,
+  "segment": "University student or volunteer-year participant (amounts are in euros)",
+  "income": 13000,
+  "behaviour": "Trend and app user",
+  "behaviour_how": "Tries new apps early, has used e-scooters or bike shares in bigger cities.",
+  "objection": "With only 10 bikes, there won't be one near me when I need it",
+  "habit": "your school is a 20-minute walk from home"
+ },
+ {
+  "id": "P013",
+  "name": "Tomas",
+  "age": 24,
+  "segment": "Young worker in their first job (amounts are in euros)",
+  "income": 33000,
+  "behaviour": "Owns a bike already",
+  "behaviour_how": "Rides their own bike for most trips and only thinks about alternatives when it is broken or stolen.",
+  "objection": "With only 10 bikes, there won't be one near me when I need it",
+  "habit": "you live in a village outside town and depend on the bus"
+ },
+ {
+  "id": "P014",
+  "name": "Iris",
+  "age": 15,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 1000,
+  "behaviour": "Walker",
+  "behaviour_how": "Walks most places because the town is small; rarely pays to get around.",
+  "objection": "I already have my own bike",
+  "habit": "your school is a 20-minute walk from home"
+ },
+ {
+  "id": "P015",
+  "name": "Maya",
+  "age": 22,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 2000,
+  "behaviour": "Train commuter",
+  "behaviour_how": "Travels by train to school, training or work and needs to cover the last stretch.",
+  "objection": "I already have my own bike",
+  "habit": "your own bike has a flat tyre you have not fixed"
+ },
+ {
+  "id": "P016",
+  "name": "Grace",
+  "age": 24,
+  "segment": "University student or volunteer-year participant (amounts are in euros)",
+  "income": 11000,
+  "behaviour": "Tight budget",
+  "behaviour_how": "Counts every euro, needs parents' OK for subscriptions, cancels anything not used weekly.",
+  "objection": "I already have my own bike",
+  "habit": "you meet friends in the old town on weekends"
+ },
+ {
+  "id": "P017",
+  "name": "Ezra",
+  "age": 22,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 3000,
+  "behaviour": "Bus and lifts",
+  "behaviour_how": "Takes the bus or gets driven by parents or friends; plans trips around the timetable.",
+  "objection": "What if the bike is broken or the lock doesn't open?",
+  "habit": "your school is a 20-minute walk from home"
+ },
+ {
+  "id": "P018",
+  "name": "Talia",
+  "age": 25,
+  "segment": "Young worker in their first job (amounts are in euros)",
+  "income": 28000,
+  "behaviour": "Bus and lifts",
+  "behaviour_how": "Takes the bus or gets driven by parents or friends; plans trips around the timetable.",
+  "objection": "The town is so small I can just walk",
+  "habit": "your own bike has a flat tyre you have not fixed"
+ },
+ {
+  "id": "P019",
+  "name": "Min",
+  "age": 15,
+  "segment": "School pupil (money is pocket money or a small side job; amounts are in euros)",
+  "income": 2000,
+  "behaviour": "Owns a bike already",
+  "behaviour_how": "Rides their own bike for most trips and only thinks about alternatives when it is broken or stolen.",
+  "objection": "I already have my own bike",
+  "habit": "you go to sports training twice a week in the evening"
+ },
+ {
+  "id": "P020",
+  "name": "Quinn",
+  "age": 14,
+  "segment": "Apprentice or vocational student (amounts are in euros)",
+  "income": 10000,
+  "behaviour": "Walker",
+  "behaviour_how": "Walks most places because the town is small; rarely pays to get around.",
+  "objection": "In winter and rain I won't ride anyway",
+  "habit": "your own bike has a flat tyre you have not fixed"
+ }
+]
