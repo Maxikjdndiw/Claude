@@ -1,0 +1,18 @@
+[
+  {"type":"createFxRectLayer","compositionId":"main","layerId":1,"name":"Card","insertIndex":0,
+   "activeRange":{"start":0,"duration":3000},
+   "transform":{"anchorPoint":[0,0],"position":[140,820],"scale":[100,100],"rotation":0,"opacity":100},
+   "rect":{"size":[800,280],"fillColor":[0.05,0.25,0.8,1]}},
+  {"type":"createFxRectLayer","compositionId":"main","layerId":2,"name":"Accent","insertIndex":0,
+   "activeRange":{"start":0,"duration":3000},
+   "transform":{"anchorPoint":[0,0],"position":[140,820],"scale":[100,100],"rotation":0,"opacity":100},
+   "rect":{"size":[16,280],"fillColor":[1,0.7,0.1,1]}},
+  {"type":"groupFxCompositionLayers","compositionId":"main","layerIds":[2,1],"groupLayerId":3,"name":"Callout group",
+   "transform":{"anchorPoint":[0,0],"position":[0,0],"scale":[100,100],"rotation":0,"opacity":100}},
+  {"type":"setFxPropertyKeyframes","compositionId":"main","property":{"layerId":3,"propertyType":"opacity"},
+   "keyframes":[
+     {"id":"in","layerTime":0,"value":{"type":"float","value":0},"easing":{"type":"linear"}},
+     {"id":"visible","layerTime":400,"value":{"type":"float","value":100},"easing":{"type":"cubicBezier","x1":0.2,"y1":0,"x2":0.2,"y2":1}},
+     {"id":"hold","layerTime":2500,"value":{"type":"float","value":100},"easing":{"type":"linear"}},
+     {"id":"out","layerTime":2900,"value":{"type":"float","value":0},"easing":{"type":"linear"}}]}
+]
