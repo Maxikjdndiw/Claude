@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="VH Advisory mark">
+  <title>VH Advisory mark</title>
+  <rect width="64" height="64" fill="#0E4D3A"></rect>
+  <g fill="#FFFFFF">
+    <polygon points="9,16 16.5,16 24,40 30.5,16 33,16 24.8,48 22.6,48"></polygon>
+    <rect x="7" y="15" width="12" height="1.6"></rect>
+    <rect x="28.5" y="15" width="7" height="1.6"></rect>
+    <rect x="38" y="16" width="5" height="32"></rect>
+    <rect x="52" y="16" width="5" height="32"></rect>
+    <rect x="43" y="31" width="9" height="2"></rect>
+    <rect x="36" y="15" width="9" height="1.6"></rect>
+    <rect x="50" y="15" width="9" height="1.6"></rect>
+    <rect x="36" y="46.4" width="9" height="1.6"></rect>
+    <rect x="50" y="46.4" width="9" height="1.6"></rect>
+  </g>
+</svg>
