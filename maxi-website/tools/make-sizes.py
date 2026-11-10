@@ -3,7 +3,8 @@
 Generate responsive photo sizes for the website.
 
 Reads every JPEG in assets/photos-source/ and writes into assets/photos/:
-  <name>-800.webp    small WebP (phones, small tiles)
+  <name>-480.webp    thumbnail WebP (small tiles on phones)
+  <name>-800.webp    medium WebP (phones, small tiles)
   <name>-1600.webp   large WebP (big tiles, lightbox, retina)
   <name>-800.jpg     JPEG fallback for very old browsers
 
@@ -17,7 +18,8 @@ Usage (from the project root):
   python3 tools/make-sizes.py --snippet img_7310 "Short alt text"
                                               # print a ready to paste <picture> tag
 
-Existing files are skipped unless the source is newer, so it is safe to run
+Existing files are skipped unless the source is newer (delete assets/photos/*
+to force a rebuild), so it is safe to run
 again after adding photos. Metadata (EXIF, GPS) is never copied.
 """
 import json
@@ -25,14 +27,15 @@ import sys
 from pathlib import Path
 
 try:
-    from PIL import Image, ImageOps
+    from PIL import Image, ImageFilter, ImageOps
 except ImportError:
     sys.exit("Pillow is missing. Run: pip install Pillow")
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets" / "photos-source"
 OUT = ROOT / "assets" / "photos"
-WIDTHS = (800, 1600)
+WIDTHS = (480, 800, 1600)
+QUALITY = {480: 70, 800: 70, 1600: 66}
 FALLBACK_WIDTH = 800
 HERO = "img_7707"
 OG_SIZE = (1200, 630)
@@ -45,10 +48,12 @@ def load(path):
 
 
 def resized(im, width):
-    if im.width <= width:
-        return im.copy()
-    height = round(im.height * width / im.width)
-    return im.resize((width, height), Image.LANCZOS)
+    if im.width > width:
+        height = round(im.height * width / im.width)
+        im = im.resize((width, height), Image.LANCZOS)
+    # A light median filter removes sensor noise. The site adds its own film
+    # grain in CSS, so this keeps files about half the size without looking soft.
+    return im.filter(ImageFilter.MedianFilter(3))
 
 
 def needs_update(src, dst):
@@ -71,7 +76,7 @@ def build():
             dst = OUT / f"{name}-{w}.webp"
             small = resized(im, w)
             if needs_update(src, dst):
-                small.save(dst, "WEBP", quality=74, method=6)
+                small.save(dst, "WEBP", quality=QUALITY[w], method=6)
             entry["webp"][w] = [small.width, small.height]
 
         dst = OUT / f"{name}-{FALLBACK_WIDTH}.jpg"
@@ -110,11 +115,10 @@ def make_og():
 def snippet(name, alt):
     manifest = json.loads((OUT / "manifest.json").read_text())
     e = manifest[name]
-    w_small = e["webp"]["800"] if "800" in e["webp"] else e["webp"][800]
-    w_large = e["webp"]["1600"] if "1600" in e["webp"] else e["webp"][1600]
+    w = e["webp"]
     print(f"""<picture>
   <source type="image/webp"
-          srcset="assets/photos/{name}-800.webp {w_small[0]}w, assets/photos/{name}-1600.webp {w_large[0]}w"
+          srcset="assets/photos/{name}-480.webp {w['480'][0]}w, assets/photos/{name}-800.webp {w['800'][0]}w, assets/photos/{name}-1600.webp {w['1600'][0]}w"
           sizes="(min-width: 1100px) 25vw, (min-width: 700px) 45vw, 90vw">
   <img src="assets/photos/{name}-800.jpg" width="{e['jpg'][0]}" height="{e['jpg'][1]}"
        alt="{alt}" loading="lazy" decoding="async">
