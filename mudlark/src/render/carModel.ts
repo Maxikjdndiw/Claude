@@ -18,6 +18,9 @@ export class CarModel {
   private wheelPivots: THREE.Group[] = []; // moves with suspension + steering
   private wheelSpinners: THREE.Group[] = []; // spins around the axle
 
+  private lampMaterial: THREE.MeshLambertMaterial;
+  private headlight: THREE.SpotLight;
+
   constructor(private cfg: VehicleConfig, colors: CarColors = { body: 0x6f8f72, roof: 0xf0e6d0 }) {
     const he = cfg.chassisHalfExtents;
     const paint = flat(colors.body);
@@ -64,7 +67,7 @@ export class CarModel {
     add(dark, width + 0.04, 0.16, 0.16, 0, floorY + 0.1, length / 2 + 0.06);
     add(dark, width + 0.04, 0.16, 0.14, 0, floorY + 0.1, -length / 2 - 0.05);
     add(dark, 0.8, 0.26, 0.04, 0, beltY - 0.2, length / 2 + 0.01);
-    const lamp = flat(0xfff2c4, { emissive: 0xffd98a, emissiveIntensity: 0.6 });
+    const lamp = (this.lampMaterial = flat(0xfff2c4, { emissive: 0xffd98a, emissiveIntensity: 0.6 }));
     const tail = flat(0xb5302a, { emissive: 0x801512, emissiveIntensity: 0.5 });
     for (const side of [1, -1]) {
       add(lamp, 0.22, 0.22, 0.05, side * (width / 2 - 0.25), beltY - 0.2, length / 2 + 0.01);
@@ -76,6 +79,17 @@ export class CarModel {
       // Mirrors.
       add(dark, 0.16, 0.12, 0.06, side * (width / 2 + 0.1), beltY + 0.2, cabinFront - 0.05);
     }
+
+    // The long car has a second pair of doors: show the pillar between them.
+    if (cfg.id === 'long') {
+      for (const side of [1, -1]) add(paint, 0.05, winH + 0.04, 0.16, side * (width / 2 - 0.015), winY, cabinFront - 1.75);
+    }
+
+    // One soft headlight beam, switched on at night.
+    this.headlight = new THREE.SpotLight(0xffe2ae, 0, 60, 0.5, 0.7, 1);
+    this.headlight.position.set(0, beltY, length / 2);
+    this.headlight.target.position.set(0, -0.9, length / 2 + 14);
+    this.group.add(this.headlight, this.headlight.target);
 
     // Snorkel up the right-hand windshield pillar (right is -X).
     add(dark, 0.09, 0.09, 0.5, -(width / 2 + 0.01), beltY + 0.06, cabinFront + 0.3);
@@ -125,6 +139,12 @@ export class CarModel {
       wheel.add(part);
     }
     return wheel;
+  }
+
+  /** @param darkness 0 by day, 1 at night */
+  setHeadlights(darkness: number): void {
+    this.headlight.intensity = darkness * 110;
+    this.lampMaterial.emissiveIntensity = 0.6 + darkness * 2;
   }
 
   /** Copy the wheel positions from the simulation. Call once per frame. */

@@ -15,6 +15,18 @@ export interface InputActions {
   toggleCamera: boolean;
   toggleDebug: boolean;
   toggleTuning: boolean;
+  /** E: attach or release the winch. */
+  winch: boolean;
+  /** G: open the camp menu. */
+  camp: boolean;
+  /** Tab: open the pause menu. */
+  menu: boolean;
+  toggleMute: boolean;
+  /** Held keys. */
+  reelIn: boolean;
+  reelOut: boolean;
+  /** N held: time of day runs fast. */
+  fastTime: boolean;
   resetVehicle: boolean;
   /** Right stick of the gamepad, for orbiting the camera. */
   lookX: number;
@@ -34,8 +46,10 @@ export class Input {
 
   constructor() {
     window.addEventListener('keydown', (e) => {
+      // Typing in a text field (the seed) must not drive the car.
+      if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
       // Stop the browser from scrolling or opening its search bar.
-      if (['F2', 'F3', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      if (['F2', 'F3', 'Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         e.preventDefault();
       }
       if (!e.repeat) this.pressed.add(e.code);
@@ -56,6 +70,13 @@ export class Input {
       toggleDebug: this.pressed.has('F3') || this.pressed.has('Backquote'),
       toggleTuning: this.pressed.has('F2') || this.pressed.has('KeyP'),
       resetVehicle: this.pressed.has('KeyT'),
+      winch: this.pressed.has('KeyE'),
+      camp: this.pressed.has('KeyG'),
+      menu: this.pressed.has('Tab'),
+      toggleMute: this.pressed.has('KeyM'),
+      reelIn: this.down('KeyR'),
+      reelOut: this.down('KeyF'),
+      fastTime: this.down('KeyN'),
       lookX: 0,
       lookY: 0,
     };
@@ -73,7 +94,8 @@ export class Input {
     let handbrake = this.down('Space');
 
     // Gamepad (standard layout): triggers = gas/brake, left stick = steer,
-    // A = handbrake, X = low range, Y = camera, Start = reset, right stick = look.
+    // A = handbrake, X = low range, Y = camera, Start = reset, right stick = look,
+    // B = winch, RB / LB = reel in / out, d-pad up = camp, d-pad down = menu.
     const pad = navigator.getGamepads?.().find((p) => p && p.connected);
     if (pad) {
       const b = pad.buttons.map((x) => x.pressed);
@@ -85,6 +107,11 @@ export class Input {
       if (justPressed(3)) actions.toggleCamera = true;
       if (justPressed(9)) actions.resetVehicle = true;
       if (justPressed(8)) actions.toggleDebug = true;
+      if (justPressed(1)) actions.winch = true;
+      if (justPressed(12)) actions.camp = true;
+      if (justPressed(13)) actions.menu = true;
+      actions.reelIn = actions.reelIn || !!b[5];
+      actions.reelOut = actions.reelOut || !!b[4];
       actions.lookX = deadzone(pad.axes[2] ?? 0);
       actions.lookY = deadzone(pad.axes[3] ?? 0);
       this.padButtonsBefore = b;

@@ -16,19 +16,25 @@ npm run build    # dist/index.html = the whole game in one file
 
 | Folder | What lives there |
 |---|---|
-| `src/config.ts` | Every tuning value (springs, grip, engine, brakes, camera) |
-| `src/sim/` | Simulation only: physics world, vehicle, input, test course. No rendering. |
-| `src/render/` | Three.js only: scene, car model, camera |
-| `src/ui/` | Debug overlay |
+| `src/config.ts` | Every tuning value: car, surfaces, world generation, winch, water, damage, upgrades, sky |
+| `src/sim/` | Simulation only, no rendering: seeded RNG and noise, terrain, features, chunk physics, vehicle, winch, input |
+| `src/render/` | Three.js only: sky, terrain chunks with level of detail, instanced props, car model, rope, particles, camera |
+| `src/game/` | One play session: game rules (pebbles, camps, winch targeting, menus) and the save file |
+| `src/ui/` | HUD, camp and pause menu, tuning panel, debug overlay |
+| `src/audio/` | Generated engine, mud, water and winch sounds and background notes |
 | `src/net/` | Network data types (multiplayer comes in phase 8) |
+
+The world is a pure function of the seed text (`src/sim/world/terrain.ts`). Nothing in
+`src/sim` uses `Math.random`, and world generation avoids `sin`/`cos`, so every machine
+builds the same world.
 
 ## Phases
 
 1. **Done:** project setup, flat test ground, one drivable car
 2. **Done:** driving feel, traction limit, live tuning panel (F2)
-3. Seeded noise terrain with chunks
-4. Surfaces with different grip
-5. Winch and trees
-6. Water, obstacles, challenge spots, camps
-7. Second vehicle, upgrades
+3. **Done:** seeded noise terrain with streamed chunks and level of detail
+4. **Done:** surfaces (grass, dirt, mud, deep mud, rock, wet rock) with grip and drag
+5. **Done:** winch with rope, trees and posts as anchors
+6. **Done:** rivers and fords, rocks, challenge spots (mud pits, knolls), camps, day and night, sound
+7. **Done:** second vehicle, pebbles, upgrades and paint
 8. Multiplayer

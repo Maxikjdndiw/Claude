@@ -94,6 +94,14 @@ export class TuningPanel {
     this.refresh();
   }
 
+  /** Point the sliders at another car (after switching vehicle or buying an upgrade). */
+  setTarget(cfg: VehicleConfig, defaults: VehicleConfig, onChange: () => void): void {
+    this.cfg = cfg;
+    this.defaults = defaults;
+    this.onChange = onChange;
+    this.refresh();
+  }
+
   get visible(): boolean {
     return !this.element.hidden;
   }

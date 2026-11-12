@@ -43,7 +43,7 @@ export class ChaseCamera {
   orbit(dx: number, dy: number): void {
     if (dx === 0 && dy === 0) return;
     this.orbitYaw -= dx * CAMERA.mouseSensitivity;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + dy * CAMERA.mouseSensitivity, 0.05, 1.3);
+    this.pitch = THREE.MathUtils.clamp(this.pitch + dy * CAMERA.mouseSensitivity, -0.1, 1.3);
     this.idleTime = 0;
   }
 
@@ -55,7 +55,7 @@ export class ChaseCamera {
    * @param car    the car's 3D object (already at its interpolated position)
    * @param speed  car speed in m/s, used to decide when to swing back behind it
    */
-  update(car: THREE.Object3D, speed: number, dt: number): void {
+  update(car: THREE.Object3D, speed: number, dt: number, groundHeight: (x: number, z: number) => number): void {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(car.quaternion);
 
     if (this.mode === 'bonnet') {
@@ -83,11 +83,11 @@ export class ChaseCamera {
 
     const angle = this.yaw + this.orbitYaw;
     const flat = Math.cos(this.pitch) * this.distance;
-    this.camera.position.set(
-      this.target.x - Math.sin(angle) * flat,
-      Math.max(0.4, this.target.y + Math.sin(this.pitch) * this.distance),
-      this.target.z - Math.cos(angle) * flat,
-    );
+    const cx = this.target.x - Math.sin(angle) * flat;
+    const cz = this.target.z - Math.cos(angle) * flat;
+    // Never let the camera sink into a hill or under the water.
+    const floor = Math.max(0, groundHeight(cx, cz)) + 0.7;
+    this.camera.position.set(cx, Math.max(floor, this.target.y + Math.sin(this.pitch) * this.distance), cz);
     this.camera.lookAt(this.target);
   }
 

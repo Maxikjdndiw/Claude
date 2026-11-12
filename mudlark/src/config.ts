@@ -10,17 +10,78 @@ export const PHYSICS = {
   timestep: 1 / 60,
 };
 
-/** Grip multiplier per surface. 1 = normal grip. Used by every wheel. */
+/**
+ * Per surface: grip multiplier (1 = normal) and rolling drag.
+ * Drag works like a light brake on every wheel that stands on the surface;
+ * deep mud has so much drag that the car gets stuck without low range or the winch.
+ */
 export const SURFACES = {
-  grass: { grip: 0.85 },
-  dirt: { grip: 1.0 },
-  mud: { grip: 0.4 },
-  rock: { grip: 1.05 },
-  wetRock: { grip: 0.6 },
+  grass: { grip: 0.85, drag: 0 },
+  dirt: { grip: 1.0, drag: 0 },
+  mud: { grip: 0.42, drag: 7 },
+  deepMud: { grip: 0.24, drag: 24 },
+  rock: { grip: 1.05, drag: 0 },
+  wetRock: { grip: 0.6, drag: 1 },
 } as const;
 export type SurfaceId = keyof typeof SURFACES;
 
+/** World generation. Changing these changes every world, so all players need the same values. */
+export const WORLD = {
+  /** Side length of one terrain chunk in metres. */
+  chunkSize: 64,
+  /** Grid cells per chunk side at full detail (2 m per cell). */
+  chunkCells: 32,
+  /** Chunks drawn around the player in every direction. */
+  viewRadius: 4,
+  /** Chunks around the player that have physics. */
+  physicsRadius: 1,
+  /** Camps and challenge spots are generated per region of this size. */
+  regionSize: 320,
+  campChance: 0.5,
+  challengesPerRegion: 2,
+  /** Knoll height divided by radius. 0.66 gives slopes of about 48 degrees: winch needed. */
+  knollSteepness: 0.66,
+  riverDepth: 1.6,
+  fordDepth: 0.32,
+  treeTriesPerChunk: 80,
+  rockTriesPerChunk: 16,
+  pebbleTriesPerChunk: 3,
+};
+
+export const WATER = {
+  /** Extra air-like drag per metre the car sits in water. */
+  dragPerMetre: 1.6,
+  /** Deeper than this the car starts to float and loses most grip. */
+  deepWater: 0.95,
+  deepWaterGrip: 0.3,
+};
+
+export const WINCH = {
+  /** How far away an anchor (tree or post) may be to attach. */
+  range: 28,
+  /** The rope cannot be let out further than this. */
+  maxLength: 34,
+  minLength: 2.5,
+  /** Reel speed in metres per second. */
+  reelSpeed: 1.2,
+  /** Strongest pull in newtons (the car weighs about 17000 N). */
+  maxForce: 30000,
+  /** Rope stretchiness: force per metre of stretch. */
+  stiffness: 30000,
+  damping: 9000,
+};
+
+export const DAMAGE = {
+  /** Sudden speed changes (m/s within one step) below this do no damage. */
+  minImpact: 4,
+  /** Condition lost per m/s of impact above the minimum (1 = whole car). */
+  perImpact: 0.02,
+  /** Engine power left when the car is completely worn (0..1). */
+  minEnginePower: 0.55,
+};
+
 export interface VehicleConfig {
+  id: 'short' | 'long';
   name: string;
   // --- body ---
   mass: number;
@@ -83,6 +144,7 @@ export interface VehicleConfig {
 
 /** The short boxy 4x4: agile, short wheelbase. */
 export const SHORT_4X4: VehicleConfig = {
+  id: 'short',
   name: 'Short 4x4',
   mass: 1700,
   chassisHalfExtents: { x: 0.8, y: 0.42, z: 1.8 },
@@ -115,6 +177,54 @@ export const SHORT_4X4: VehicleConfig = {
   steerSpeed: 2.2,
 };
 
+/** The long boxy 4x4: heavier and calmer, more stable on slopes, wider turning circle. */
+export const LONG_4X4: VehicleConfig = {
+  ...SHORT_4X4,
+  id: 'long',
+  name: 'Long 4x4',
+  mass: 2050,
+  chassisHalfExtents: { x: 0.82, y: 0.42, z: 2.25 },
+  centerOfMassY: -0.42,
+  wheelBase: 2.9,
+  trackWidth: 1.56,
+  springStiffness: 20,
+  dampingCompression: 2.8,
+  dampingRelaxation: 4.0,
+  engineForce: 8000,
+  maxSteerAngle: 0.5,
+  steerSpeed: 1.8,
+  brakeForce: 50,
+};
+
+export const VEHICLES = { short: SHORT_4X4, long: LONG_4X4 } as const;
+export type VehicleId = keyof typeof VEHICLES;
+
+/** Things to buy with pebbles at a camp. `apply` changes a copy of the car config. */
+export interface UpgradeDef {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  apply: (cfg: VehicleConfig, winch: typeof WINCH) => void;
+}
+export const UPGRADES: UpgradeDef[] = [
+  { id: 'tyres', name: 'Mud tyres', description: 'More grip on every surface.', cost: 12, apply: (c) => { c.tyreGrip *= 1.22; } },
+  { id: 'engine', name: 'Engine tune', description: 'More pulling force.', cost: 18, apply: (c) => { c.engineForce *= 1.25; } },
+  { id: 'lift', name: 'Suspension lift', description: 'More ground clearance and wheel travel.', cost: 15, apply: (c) => { c.suspensionRestLength += 0.1; c.suspensionTravel += 0.08; } },
+  { id: 'winch', name: 'Long winch rope', description: 'Reach anchors further away and pull harder.', cost: 10, apply: (_c, w) => { w.range += 12; w.maxLength += 14; w.maxForce *= 1.3; } },
+];
+export const LONG_4X4_COST = 25;
+
+/** Paint colours (cosmetic). The first one is free. */
+export const PAINTS = [
+  { id: 'sage', name: 'Sage', color: 0x6f8f72, roof: 0xf0e6d0, cost: 0 },
+  { id: 'sand', name: 'Sand', color: 0xcfae78, roof: 0xf5efe0, cost: 5 },
+  { id: 'rust', name: 'Rust', color: 0xa8553a, roof: 0xf0e6d0, cost: 5 },
+  { id: 'sky', name: 'Lake blue', color: 0x5b8fa6, roof: 0xf5efe0, cost: 5 },
+  { id: 'night', name: 'Charcoal', color: 0x3c4046, roof: 0x8d8f8c, cost: 8 },
+  { id: 'butter', name: 'Butter', color: 0xe6c95a, roof: 0x2b2a28, cost: 8 },
+] as const;
+
 export const CAMERA = {
   distance: 7.5,
   minDistance: 4,
@@ -127,4 +237,11 @@ export const CAMERA = {
   autoCenterDelay: 2.5,
   mouseSensitivity: 0.0028,
   fov: 55,
+};
+
+export const SKY = {
+  /** Length of a full day and night in real minutes. */
+  dayLengthMinutes: 18,
+  /** Time of day a new game starts at: 0 = midnight, 0.5 = noon. */
+  startTime: 0.36,
 };

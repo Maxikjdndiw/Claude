@@ -1,144 +1,128 @@
-// Entry point: wires simulation, rendering and UI together.
-// Simulation (src/sim) knows nothing about rendering (src/render) or the page.
-import * as THREE from 'three';
+// Entry point: creates the shared parts (renderer, camera, input, UI, sound),
+// shows the title screen and runs the main loop.
+// Simulation code lives in src/sim, rendering in src/render, rules in src/game.
 import './style.css';
-import { PHYSICS, SHORT_4X4 } from './config';
-import { BodySync } from './render/bodySync';
-import { CarModel } from './render/carModel';
+import { Sound } from './audio/sound';
+import { SHORT_4X4 } from './config';
+import { Game } from './game/game';
+import { loadSave, storeSave } from './game/save';
 import { ChaseCamera } from './render/chaseCamera';
 import { GameScene } from './render/scene';
 import { Input } from './sim/input';
 import { PhysicsWorld } from './sim/physicsWorld';
-import { buildTestCourse, GROUND_HALF_SIZE } from './sim/testCourse';
-import { Vehicle } from './sim/vehicle';
+import { CampMenu } from './ui/campMenu';
 import { DebugOverlay } from './ui/debugOverlay';
+import { Hud } from './ui/hud';
 import { TuningPanel } from './ui/tuningPanel';
 
 const $ = (id: string) => document.getElementById(id)!;
+
+const SEED_WORDS_A = ['mossy', 'quiet', 'amber', 'misty', 'stony', 'golden', 'windy', 'muddy', 'pine', 'heron', 'foggy', 'rusty'];
+const SEED_WORDS_B = ['ridge', 'hollow', 'creek', 'meadow', 'pass', 'ford', 'marsh', 'valley', 'track', 'summit', 'glen', 'moor'];
+/** Picking a seed is not part of the world simulation, so Math.random is fine here. */
+function randomSeed(): string {
+  const pick = (list: string[]) => list[Math.floor(Math.random() * list.length)];
+  return `${pick(SEED_WORDS_A)}-${pick(SEED_WORDS_B)}-${Math.floor(Math.random() * 90 + 10)}`;
+}
 
 async function main(): Promise<void> {
   const canvas = $('game') as HTMLCanvasElement;
   const startScreen = $('start-screen');
   const startButton = $('start-button') as HTMLButtonElement;
+  const seedInput = $('seed-input') as HTMLInputElement;
+
+  const save = loadSave();
+  seedInput.value = save.lastSeed || 'mudlark';
 
   await PhysicsWorld.load();
 
-  // --- simulation ------------------------------------------------------------
-  const physics = new PhysicsWorld();
-  physics.addStaticBox(
-    { x: GROUND_HALF_SIZE, y: 1, z: GROUND_HALF_SIZE },
-    { x: 0, y: -1, z: 0 },
-    { x: 0, y: 0, z: 0, w: 1 },
-    'grass',
-  );
-  // The car gets its own copy of the config, so the tuning panel can change it live.
-  const carConfig = structuredClone(SHORT_4X4);
-  const vehicle = new Vehicle(physics, carConfig, { x: 0, y: 1.2, z: 0 });
-  const input = new Input();
-
-  // --- rendering -------------------------------------------------------------
-  const game = new GameScene(canvas);
+  const scene = new GameScene(canvas);
   const chase = new ChaseCamera(canvas);
-  const car = new CarModel(carConfig);
-  game.scene.add(car.group);
-  const synced: BodySync[] = [new BodySync(vehicle.body, car.group)];
-  const carSync = synced[0];
-
-  for (const box of buildTestCourse()) {
-    const mesh = game.addBox(box);
-    if (box.mass) {
-      synced.push(new BodySync(physics.addDynamicBox(box.halfExtents, box.position, box.mass), mesh));
-    } else {
-      physics.addStaticBox(box.halfExtents, box.position, box.rotation, box.surface);
-    }
-  }
-
-  // --- UI ----------------------------------------------------------------------
+  const input = new Input();
+  const hud = new Hud();
   const debug = new DebugOverlay($('debug'));
-  const tuning = new TuningPanel($('tuning'), carConfig, SHORT_4X4, () => vehicle.applyConfig());
-  const hudSpeed = $('hud-speed');
-  const hudGear = $('hud-gear');
-  const hudRange = $('hud-range');
+  const sound = new Sound();
+  const menu = new CampMenu($('menu'));
+  const tuning = new TuningPanel($('tuning'), structuredClone(SHORT_4X4), SHORT_4X4, () => {});
+
+  const lockPointer = () => {
+    // Capturing the mouse is optional; without it you orbit by dragging.
+    try {
+      (canvas.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {});
+    } catch {
+      /* not available here */
+    }
+  };
+
+  const showTitle = () => {
+    game.active = false;
+    input.enabled = false;
+    hud.setVisible(false);
+    startScreen.hidden = false;
+    document.exitPointerLock?.();
+  };
+  const deps = { scene, chase, hud, debug, tuning, menu, sound, save, onQuit: showTitle };
+
+  // A world is already running behind the title screen.
+  let game = new Game(seedInput.value.trim().toLowerCase() || 'mudlark', deps);
 
   const resize = () => {
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
-    game.resize(w, h);
+    scene.resize(w, h);
     chase.resize(w, h);
   };
   window.addEventListener('resize', resize);
   resize();
 
+  $('seed-random').addEventListener('click', () => (seedInput.value = randomSeed()));
   startButton.disabled = false;
-  startButton.textContent = 'Click to start';
-  startButton.addEventListener('click', () => {
-    startScreen.hidden = true;
-    $('hud').hidden = false;
-    $('hint').hidden = false;
+  startButton.textContent = 'Start driving';
+  $('seed-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const seed = seedInput.value.trim().toLowerCase() || randomSeed();
+    seedInput.value = seed;
+    if (seed !== game.seedText) {
+      game.dispose();
+      game = new Game(seed, deps);
+    }
+    save.lastSeed = seed;
+    storeSave(save);
+    game.active = true;
     input.enabled = true;
-    // Capturing the mouse is optional; without it you orbit by dragging.
-    try {
-      const lock = canvas.requestPointerLock() as unknown as Promise<void> | undefined;
-      lock?.catch?.(() => {});
-    } catch {
-      /* not available here */
-    }
+    startScreen.hidden = true;
+    hud.setVisible(true);
+    seedInput.blur();
+    sound.start(save.muted);
+    lockPointer();
+    hud.say(`World "${seed}"`);
   });
+
   canvas.addEventListener('click', () => {
-    if (input.enabled && !document.pointerLockElement && !tuning.visible) {
-      try {
-        (canvas.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {});
-      } catch {
-        /* ignore */
-      }
-    }
+    if (game.active && !document.pointerLockElement && !tuning.visible && !menu.visible) lockPointer();
+  });
+  $('menu-button').addEventListener('click', () => game.openPauseMenu());
+  menu.onClose = () => {
+    if (game.active) lockPointer();
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && menu.visible) menu.close();
   });
 
-  // --- main loop: fixed physics steps, one render per screen refresh ----------
   let last = performance.now();
-  let accumulator = 0;
-  let drive = input.poll().drive;
-
   function frame(now: number): void {
     requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000); // never try to catch up more than 0.1 s
     last = now;
-
-    const polled = input.poll();
-    drive = polled.drive;
-    if (polled.actions.toggleDebug) debug.toggle();
-    if (polled.actions.toggleTuning) tuning.toggle();
-    if (polled.actions.toggleCamera) chase.toggleMode();
-    if (polled.actions.resetVehicle && input.enabled) vehicle.reset();
-    chase.orbit(polled.actions.lookX * 900 * dt, polled.actions.lookY * 600 * dt);
-
-    accumulator += dt;
-    while (accumulator >= PHYSICS.timestep) {
-      vehicle.step(drive, PHYSICS.timestep);
-      physics.step();
-      for (const s of synced) s.read();
-      accumulator -= PHYSICS.timestep;
-    }
-
-    const alpha = accumulator / PHYSICS.timestep;
-    for (const s of synced) s.apply(alpha);
-    car.updateWheels(vehicle);
-    carSync.apply(alpha);
-    chase.update(car.group, vehicle.forwardSpeed, dt);
-    game.followWithSun(car.group.position);
-
-    hudSpeed.textContent = Math.abs(vehicle.forwardSpeed * 3.6).toFixed(0);
-    hudGear.textContent = vehicle.gear;
-    hudRange.textContent = vehicle.lowRange ? 'LOW' : 'HIGH';
-    hudRange.classList.toggle('is-low', vehicle.lowRange);
-    debug.update(dt, vehicle, 'none yet (flat test ground)', chase.mode);
-
-    game.renderer.render(game.scene, chase.camera);
+    const { drive, actions } = input.poll();
+    chase.orbit(actions.lookX * 900 * dt, actions.lookY * 600 * dt);
+    game.frame(dt, drive, actions);
+    scene.renderer.render(scene.scene, chase.camera);
   }
   requestAnimationFrame(frame);
 
   // Small hook for automated tests and for poking around in the console.
-  (window as unknown as Record<string, unknown>).__game = { vehicle, physics, THREE };
+  Object.defineProperty(window, '__game', { get: () => game });
 }
 
 main().catch((err) => {

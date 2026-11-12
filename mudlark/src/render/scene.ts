@@ -1,81 +1,85 @@
-// Renderer, sky, fog, lights and the test ground. Rendering only.
+// Renderer, sky, fog, sun and the day/night cycle. Rendering only.
 import * as THREE from 'three';
-import { GROUND_HALF_SIZE, type CourseBox } from '../sim/testCourse';
+import { SKY } from '../config';
 
-const SKY = 0xf3c9a0; // warm late-afternoon haze
+/** Look of the sky for a given height of the sun (-1 = midnight, 1 = noon). */
+interface SkyKey {
+  h: number;
+  sky: number;
+  sun: number;
+  sunPower: number;
+  ambient: number;
+}
+const KEYS: SkyKey[] = [
+  { h: -1.0, sky: 0x18233a, sun: 0x8fa8d8, sunPower: 0.55, ambient: 0.5 },
+  { h: -0.25, sky: 0x1f2c48, sun: 0x8fa8d8, sunPower: 0.5, ambient: 0.5 },
+  { h: -0.06, sky: 0x77688a, sun: 0xff9e6b, sunPower: 0.25, ambient: 0.7 },
+  { h: 0.1, sky: 0xf3c29a, sun: 0xffb070, sunPower: 1.9, ambient: 0.9 },
+  { h: 0.4, sky: 0xd9e3dc, sun: 0xffdfb0, sunPower: 2.5, ambient: 1.1 },
+  { h: 1.0, sky: 0xcfe2e6, sun: 0xfff0d2, sunPower: 2.6, ambient: 1.15 },
+];
 
 export class GameScene {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
+  /** 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset. */
+  timeOfDay = SKY.startTime;
+  /** 0 in daylight, 1 at night (for headlights). */
+  darkness = 0;
+
   private sun: THREE.DirectionalLight;
-  private sunOffset = new THREE.Vector3(-30, 38, -22);
+  private ambient: THREE.HemisphereLight;
+  private sunOffset = new THREE.Vector3();
+  private skyColor = new THREE.Color();
+  private a = new THREE.Color();
+  private b = new THREE.Color();
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    this.scene.background = new THREE.Color(SKY);
-    this.scene.fog = new THREE.Fog(SKY, 40, 190);
+    this.scene.background = this.skyColor;
+    this.scene.fog = new THREE.Fog(0xffffff, 60, 250);
 
-    // Sky light from above, warm bounce light from the ground.
-    this.scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x8a6a45, 1.1));
+    this.ambient = new THREE.HemisphereLight(0xcfe3ff, 0x8a6a45, 1.1);
     this.sun = new THREE.DirectionalLight(0xffd9a3, 2.4);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const cam = this.sun.shadow.camera;
-    cam.left = cam.bottom = -28;
-    cam.right = cam.top = 28;
+    cam.left = cam.bottom = -42;
+    cam.right = cam.top = 42;
     cam.near = 1;
-    cam.far = 120;
-    this.sun.shadow.bias = -0.0005;
-    this.sun.shadow.normalBias = 0.04;
-    this.scene.add(this.sun, this.sun.target);
-
-    this.scene.add(this.makeGround());
+    cam.far = 220;
+    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.normalBias = 0.06;
+    this.scene.add(this.ambient, this.sun, this.sun.target);
+    this.updateSky(0);
   }
 
-  /** Flat ground with a soft patchwork so you can see how fast you move. */
-  private makeGround(): THREE.Mesh {
-    const size = 64;
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d')!;
-    const tones = ['#8fae62', '#86a65c', '#98b56a', '#7f9f58'];
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        // Fixed pattern (no Math.random): the ground looks the same every time.
-        ctx.fillStyle = tones[(x * 3 + y * 5 + ((x * y) % 3)) % tones.length];
-        ctx.fillRect(x * 8, y * 8, 8, 8);
-      }
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.magFilter = THREE.NearestFilter;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.repeat.setScalar(GROUND_HALF_SIZE / 16); // one tile = 4 m
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(GROUND_HALF_SIZE * 2, GROUND_HALF_SIZE * 2),
-      new THREE.MeshLambertMaterial({ map: tex }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    return ground;
-  }
+  /** Advances the time of day and updates sky, fog and light colours. */
+  updateSky(dt: number, speedUp = 1): void {
+    this.timeOfDay = (this.timeOfDay + (dt * speedUp) / (SKY.dayLengthMinutes * 60)) % 1;
+    const angle = (this.timeOfDay - 0.25) * Math.PI * 2;
+    const h = Math.sin(angle); // height of the sun
 
-  /** Adds a box of the test course and returns its mesh. */
-  addBox(box: CourseBox): THREE.Mesh {
-    const he = box.halfExtents;
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(he.x * 2, he.y * 2, he.z * 2),
-      new THREE.MeshLambertMaterial({ color: box.color, flatShading: true }),
-    );
-    mesh.position.set(box.position.x, box.position.y, box.position.z);
-    mesh.quaternion.set(box.rotation.x, box.rotation.y, box.rotation.z, box.rotation.w);
-    mesh.castShadow = mesh.receiveShadow = true;
-    this.scene.add(mesh);
-    return mesh;
+    // Blend between the two nearest sky keys.
+    let i = 0;
+    while (i < KEYS.length - 2 && h > KEYS[i + 1].h) i++;
+    const k0 = KEYS[i];
+    const k1 = KEYS[i + 1];
+    const t = THREE.MathUtils.clamp((h - k0.h) / (k1.h - k0.h), 0, 1);
+    this.skyColor.copy(this.a.setHex(k0.sky)).lerp(this.b.setHex(k1.sky), t);
+    (this.scene.fog as THREE.Fog).color.copy(this.skyColor);
+    this.sun.color.copy(this.a.setHex(k0.sun)).lerp(this.b.setHex(k1.sun), t);
+    this.sun.intensity = THREE.MathUtils.lerp(k0.sunPower, k1.sunPower, t);
+    this.ambient.intensity = THREE.MathUtils.lerp(k0.ambient, k1.ambient, t);
+    this.darkness = 1 - THREE.MathUtils.smoothstep(h, -0.15, 0.15);
+
+    // By day the light comes from the sun, at night from a fixed moon.
+    if (h > -0.06) this.sunOffset.set(Math.cos(angle) * 80, Math.max(0.12, h) * 90, 45);
+    else this.sunOffset.set(-40, 80, -30);
   }
 
   /** The shadow area is small and follows the player, which keeps shadows sharp. */
