@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="claude:viewport-fit-sides" content="cover" />
+    <title>Mudlark</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@800&family=DM+Mono&family=Figtree:wght@400;700&display=swap" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="start-screen">
+      <div class="inner">
+        <span class="phase">Phase 1 · test ground</span>
+        <h1>Mudlark</h1>
+        <p>A slow off-road wander. No timers, no racing. For now there is one car and a flat field with ramps, bumps and crates to try it on.</p>
+        <dl class="keys">
+          <dt>W A S D / arrows</dt><dd>drive and steer (S brakes, then reverses)</dd>
+          <dt>Space</dt><dd>handbrake</dd>
+          <dt>Shift</dt><dd>switch low range on or off</dd>
+          <dt>Mouse</dt><dd>look around, wheel zooms</dd>
+          <dt>C</dt><dd>change camera</dd>
+          <dt>T</dt><dd>put the car back on its wheels</dd>
+          <dt>F3</dt><dd>debug overlay (or the ` key)</dd>
+        </dl>
+        <button id="start-button" type="button" disabled>Loading physics…</button>
+      </div>
+    </div>
+
+    <div id="hud" hidden>
+      <span id="hud-speed">0</span>
+      <div class="stack">
+        <span class="unit">km/h</span>
+        <span>gear <span id="hud-gear">N</span> · <span id="hud-range">HIGH</span></span>
+      </div>
+    </div>
+    <div id="hint" hidden>Esc frees the mouse · T resets the car · F3 debug</div>
+    <pre id="debug" hidden></pre>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
