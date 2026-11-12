@@ -35,7 +35,7 @@ export class DebugOverlay {
       `wheels`,
       ...vehicle.wheels.map(
         (w, i) =>
-          `  ${WHEEL_NAMES[i]}  ${w.inContact ? 'ground' : 'air   '}  ${(w.surface ?? '-').padEnd(8)} spring ${w.suspensionLength.toFixed(2)} m`,
+          `  ${WHEEL_NAMES[i]}  ${w.inContact ? 'ground' : 'air   '}  ${(w.surface ?? '-').padEnd(8)} spring ${w.suspensionLength.toFixed(2)} m${w.slipping ? '  SLIP' : ''}`,
       ),
     ];
     this.element.textContent = lines.join('\n');

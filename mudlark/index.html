@@ -12,7 +12,7 @@
 
     <div id="start-screen">
       <div class="inner">
-        <span class="phase">Phase 1 · test ground</span>
+        <span class="phase">Phase 2 · driving feel</span>
         <h1>Mudlark</h1>
         <p>A slow off-road wander. No timers, no racing. For now there is one car and a flat field with ramps, bumps and crates to try it on.</p>
         <dl class="keys">
@@ -22,6 +22,7 @@
           <dt>Mouse</dt><dd>look around, wheel zooms</dd>
           <dt>C</dt><dd>change camera</dd>
           <dt>T</dt><dd>put the car back on its wheels</dd>
+          <dt>F2 or P</dt><dd>tuning sliders</dd>
           <dt>F3</dt><dd>debug overlay (or the ` key)</dd>
         </dl>
         <button id="start-button" type="button" disabled>Loading physics…</button>
@@ -35,8 +36,19 @@
         <span>gear <span id="hud-gear">N</span> · <span id="hud-range">HIGH</span></span>
       </div>
     </div>
-    <div id="hint" hidden>Esc frees the mouse · T resets the car · F3 debug</div>
+    <div id="hint" hidden>Esc frees the mouse · T resets the car · F2 tuning · F3 debug</div>
     <pre id="debug" hidden></pre>
+
+    <aside id="tuning" hidden>
+      <h2>Tuning</h2>
+      <p>Changes apply while you drive. Values that differ from the config file are highlighted.</p>
+      <div class="tune-list"></div>
+      <div class="tune-buttons">
+        <button id="tune-reset" type="button">Reset to defaults</button>
+        <button id="tune-copy" type="button">Copy values</button>
+      </div>
+      <textarea id="tune-output" rows="6" readonly hidden aria-label="Values to paste into src/config.ts"></textarea>
+    </aside>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

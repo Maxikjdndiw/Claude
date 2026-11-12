@@ -14,6 +14,7 @@ export interface DriveInput {
 export interface InputActions {
   toggleCamera: boolean;
   toggleDebug: boolean;
+  toggleTuning: boolean;
   resetVehicle: boolean;
   /** Right stick of the gamepad, for orbiting the camera. */
   lookX: number;
@@ -34,7 +35,7 @@ export class Input {
   constructor() {
     window.addEventListener('keydown', (e) => {
       // Stop the browser from scrolling or opening its search bar.
-      if (['F3', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      if (['F2', 'F3', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         e.preventDefault();
       }
       if (!e.repeat) this.pressed.add(e.code);
@@ -53,6 +54,7 @@ export class Input {
     const actions: InputActions = {
       toggleCamera: this.pressed.has('KeyC'),
       toggleDebug: this.pressed.has('F3') || this.pressed.has('Backquote'),
+      toggleTuning: this.pressed.has('F2') || this.pressed.has('KeyP'),
       resetVehicle: this.pressed.has('KeyT'),
       lookX: 0,
       lookY: 0,

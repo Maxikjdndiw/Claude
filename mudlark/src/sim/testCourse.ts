@@ -68,6 +68,7 @@ export function buildTestCourse(): CourseBox[] {
   }
 
   // Further right: a side slope to test how easily the car rolls over.
+  // Drive onto it from its low edge (the far right side), then along it.
   const a = deg(25);
   boxes.push({
     halfExtents: { x: 4, y: 0.25, z: 12 },

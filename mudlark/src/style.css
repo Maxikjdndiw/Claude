@@ -74,3 +74,28 @@ body {
   background: rgba(42, 37, 32, 0.78); color: #e9f0d8;
   font: 12px/1.45 var(--font-data); white-space: pre; pointer-events: none;
 }
+
+/* ---- tuning panel (F2) ---- */
+#tuning {
+  position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: var(--gutter-right);
+  bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  width: min(320px, calc(100vw - var(--gutter-left) - var(--gutter-right)));
+  box-sizing: border-box; padding: 14px; border-radius: 4px; overflow-y: auto;
+  background: rgba(42, 37, 32, 0.86); color: var(--paper);
+  display: flex; flex-direction: column; gap: 10px; font-size: 0.8rem;
+}
+#tuning h2 { margin: 0; font: 800 1.3rem var(--font-display); }
+#tuning p { margin: 0; opacity: 0.8; line-height: 1.4; }
+.tune-list { display: flex; flex-direction: column; gap: 8px; }
+.tune-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.tune-row input { grid-column: 1 / -1; width: 100%; accent-color: var(--ochre); margin: 0; }
+.tune-value { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.tune-value.is-changed { color: var(--ochre); }
+.tune-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.tune-buttons button {
+  font: 700 0.8rem var(--font-body); padding: 8px 12px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--paper); background: transparent; color: var(--paper);
+}
+.tune-buttons button:hover { background: rgba(251, 243, 228, 0.15); }
+.tune-buttons button:focus-visible, .tune-row input:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
+#tune-output { font: 11px/1.4 var(--font-data); background: #1d1a17; color: #e9f0d8; border: 0; border-radius: 4px; padding: 8px; resize: vertical; }

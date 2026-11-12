@@ -12,10 +12,10 @@ export const PHYSICS = {
 
 /** Grip multiplier per surface. 1 = normal grip. Used by every wheel. */
 export const SURFACES = {
-  grass: { grip: 1.0 },
-  dirt: { grip: 0.9 },
-  mud: { grip: 0.45 },
-  rock: { grip: 1.15 },
+  grass: { grip: 0.85 },
+  dirt: { grip: 1.0 },
+  mud: { grip: 0.4 },
+  rock: { grip: 1.05 },
   wetRock: { grip: 0.6 },
 } as const;
 export type SurfaceId = keyof typeof SURFACES;
@@ -56,6 +56,8 @@ export interface VehicleConfig {
   // --- engine and brakes ---
   /** Total drive force in newtons, split over all 4 wheels (4-wheel drive). */
   engineForce: number;
+  /** How fast the engine follows the pedal: 3 = from idle to full power in 1/3 second. */
+  throttleResponse: number;
   /** Top speed in high range, m/s. Engine force fades out towards this speed. */
   maxSpeed: number;
   reverseMaxSpeed: number;
@@ -96,12 +98,13 @@ export const SHORT_4X4: VehicleConfig = {
   dampingCompression: 2.6,
   dampingRelaxation: 3.6,
   maxSuspensionForce: 60000,
-  tyreGrip: 1.6,
+  tyreGrip: 0.75,
   sideGrip: 0.85,
-  engineForce: 9000,
+  engineForce: 7000,
+  throttleResponse: 3,
   maxSpeed: 17, // about 60 km/h: this is not a racing game
   reverseMaxSpeed: 6,
-  lowRangeForceMultiplier: 2.0,
+  lowRangeForceMultiplier: 2.2,
   lowRangeMaxSpeed: 5,
   brakeForce: 45,
   handbrakeForce: 120,

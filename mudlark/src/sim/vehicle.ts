@@ -13,6 +13,8 @@ export const WHEEL_NAMES = ['FL', 'FR', 'RL', 'RR'] as const;
 
 export interface WheelState {
   inContact: boolean;
+  /** True while the engine pushes harder than the tyre can grip (wheelspin). */
+  slipping: boolean;
   surface: SurfaceId | null;
   /** Current spring length (rest length when hanging in the air). */
   suspensionLength: number;
@@ -34,7 +36,9 @@ export class Vehicle {
   lowRange = false;
 
   private controller: RAPIER.DynamicRayCastVehicleController;
+  private collider: RAPIER.Collider;
   private steering = 0;
+  private pedal = 0; // smoothed throttle, -1..1
 
   constructor(
     private physics: PhysicsWorld,
@@ -47,18 +51,7 @@ export class Vehicle {
     this.body = physics.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic().setTranslation(spawn.x, spawn.y, spawn.z).setCanSleep(false),
     );
-    // Mass and inertia of a solid box, but with the centre of mass moved down
-    // (engine, gearbox and axles are low in a real car).
-    const m = cfg.mass / 3;
-    const inertia = {
-      x: m * (he.y * he.y + he.z * he.z),
-      y: m * (he.x * he.x + he.z * he.z),
-      z: m * (he.x * he.x + he.y * he.y),
-    };
-    const collider = RAPIER.ColliderDesc.cuboid(he.x, he.y, he.z)
-      .setMassProperties(cfg.mass, { x: 0, y: cfg.centerOfMassY, z: 0 }, inertia, { x: 0, y: 0, z: 0, w: 1 })
-      .setFriction(0.4);
-    physics.world.createCollider(collider, this.body);
+    this.collider = physics.world.createCollider(RAPIER.ColliderDesc.cuboid(he.x, he.y, he.z).setFriction(0.4), this.body);
 
     this.controller = physics.world.createVehicleController(this.body);
     this.controller.indexUpAxis = 1;
@@ -76,15 +69,35 @@ export class Vehicle {
     this.wheels = [];
     this.wheelMounts.forEach((mount, i) => {
       this.controller.addWheel(mount, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, cfg.suspensionRestLength, cfg.wheelRadius);
+      this.wheels.push({ inContact: false, slipping: false, surface: null, suspensionLength: cfg.suspensionRestLength, steering: 0, rotation: 0 });
+    });
+    this.applyConfig();
+  }
+
+  /**
+   * Copies the tuning values from `cfg` into the physics engine.
+   * Call again whenever a value in `cfg` was changed (the tuning panel does this).
+   */
+  applyConfig(): void {
+    const cfg = this.cfg;
+    const he = cfg.chassisHalfExtents;
+    // Mass and inertia of a solid box, but with the centre of mass moved down
+    // (engine, gearbox and axles are low in a real car).
+    const m = cfg.mass / 3;
+    const inertia = {
+      x: m * (he.y * he.y + he.z * he.z),
+      y: m * (he.x * he.x + he.z * he.z),
+      z: m * (he.x * he.x + he.y * he.y),
+    };
+    this.collider.setMassProperties(cfg.mass, { x: 0, y: cfg.centerOfMassY, z: 0 }, inertia, { x: 0, y: 0, z: 0, w: 1 });
+    for (let i = 0; i < 4; i++) {
       this.controller.setWheelSuspensionStiffness(i, cfg.springStiffness);
       this.controller.setWheelSuspensionCompression(i, cfg.dampingCompression);
       this.controller.setWheelSuspensionRelaxation(i, cfg.dampingRelaxation);
       this.controller.setWheelMaxSuspensionTravel(i, cfg.suspensionTravel);
       this.controller.setWheelMaxSuspensionForce(i, cfg.maxSuspensionForce);
-      this.controller.setWheelFrictionSlip(i, cfg.tyreGrip);
       this.controller.setWheelSideFrictionStiffness(i, cfg.sideGrip);
-      this.wheels.push({ inContact: false, surface: null, suspensionLength: cfg.suspensionRestLength, steering: 0, rotation: 0 });
-    });
+    }
   }
 
   /** Advance the car by one fixed step. Call right before the physics world steps. */
@@ -106,13 +119,18 @@ export class Vehicle {
     let engine = 0; // total drive force, + = forward
     let brake = 0; // per wheel
 
+    // The engine does not jump to full power: the pedal eases towards the input.
+    const pedalStep = cfg.throttleResponse * dt;
+    this.pedal += Math.max(-pedalStep, Math.min(pedalStep, input.throttle - this.pedal));
+    if (input.throttle === 0) this.pedal = 0; // lifting off is immediate
+
     if (input.throttle > 0) {
       if (speed < -0.5) {
         brake = cfg.brakeForce * input.throttle; // rolling backwards: brake first
       } else {
         // Full force at standstill, fading to zero at top speed.
         const fade = Math.max(0, 1 - speed / maxForward);
-        engine = cfg.engineForce * forceScale * input.throttle * Math.min(1, fade * 2);
+        engine = cfg.engineForce * forceScale * Math.max(0, this.pedal) * Math.min(1, fade * 2);
         this.gear = 'D';
       }
     } else if (input.throttle < 0) {
@@ -120,7 +138,7 @@ export class Vehicle {
         brake = cfg.brakeForce * -input.throttle; // rolling forwards: brake first
       } else {
         const fade = Math.max(0, 1 + speed / maxReverse);
-        engine = cfg.engineForce * forceScale * input.throttle * Math.min(1, fade * 2);
+        engine = cfg.engineForce * forceScale * Math.min(0, this.pedal) * Math.min(1, fade * 2);
         this.gear = 'R';
       }
     } else {
@@ -141,8 +159,14 @@ export class Vehicle {
       const wheel = this.wheels[i];
       // Grip depends on what the wheel stood on in the previous step.
       const surfaceGrip = wheel.surface ? SURFACES[wheel.surface].grip : 1;
-      c.setWheelFrictionSlip(i, cfg.tyreGrip * surfaceGrip);
-      c.setWheelEngineForce(i, engine / 4); // 4-wheel drive
+      const grip = cfg.tyreGrip * surfaceGrip;
+      c.setWheelFrictionSlip(i, grip);
+      // Traction limit: a tyre cannot push harder than grip x the weight on it.
+      // A wheel in the air or on mud therefore delivers little or no drive.
+      const maxDrive = grip * (wheel.inContact ? (c.wheelSuspensionForce(i) ?? 0) : 0);
+      const wanted = engine / 4; // 4-wheel drive: equal share for every wheel
+      wheel.slipping = Math.abs(wanted) > maxDrive + 1;
+      c.setWheelEngineForce(i, Math.max(-maxDrive, Math.min(maxDrive, wanted)));
       c.setWheelSteering(i, isFront ? this.steering : 0);
       c.setWheelBrake(i, brake + (!isFront && input.handbrake ? cfg.handbrakeForce : 0));
     }

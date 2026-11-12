@@ -25,7 +25,7 @@ npm run build    # dist/index.html = the whole game in one file
 ## Phases
 
 1. **Done:** project setup, flat test ground, one drivable car
-2. Tune driving feel
+2. **Done:** driving feel, traction limit, live tuning panel (F2)
 3. Seeded noise terrain with chunks
 4. Surfaces with different grip
 5. Winch and trees

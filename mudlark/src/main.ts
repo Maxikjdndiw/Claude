@@ -12,6 +12,7 @@ import { PhysicsWorld } from './sim/physicsWorld';
 import { buildTestCourse, GROUND_HALF_SIZE } from './sim/testCourse';
 import { Vehicle } from './sim/vehicle';
 import { DebugOverlay } from './ui/debugOverlay';
+import { TuningPanel } from './ui/tuningPanel';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -30,13 +31,15 @@ async function main(): Promise<void> {
     { x: 0, y: 0, z: 0, w: 1 },
     'grass',
   );
-  const vehicle = new Vehicle(physics, SHORT_4X4, { x: 0, y: 1.2, z: 0 });
+  // The car gets its own copy of the config, so the tuning panel can change it live.
+  const carConfig = structuredClone(SHORT_4X4);
+  const vehicle = new Vehicle(physics, carConfig, { x: 0, y: 1.2, z: 0 });
   const input = new Input();
 
   // --- rendering -------------------------------------------------------------
   const game = new GameScene(canvas);
   const chase = new ChaseCamera(canvas);
-  const car = new CarModel(SHORT_4X4);
+  const car = new CarModel(carConfig);
   game.scene.add(car.group);
   const synced: BodySync[] = [new BodySync(vehicle.body, car.group)];
   const carSync = synced[0];
@@ -52,6 +55,7 @@ async function main(): Promise<void> {
 
   // --- UI ----------------------------------------------------------------------
   const debug = new DebugOverlay($('debug'));
+  const tuning = new TuningPanel($('tuning'), carConfig, SHORT_4X4, () => vehicle.applyConfig());
   const hudSpeed = $('hud-speed');
   const hudGear = $('hud-gear');
   const hudRange = $('hud-range');
@@ -81,7 +85,7 @@ async function main(): Promise<void> {
     }
   });
   canvas.addEventListener('click', () => {
-    if (input.enabled && !document.pointerLockElement) {
+    if (input.enabled && !document.pointerLockElement && !tuning.visible) {
       try {
         (canvas.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {});
       } catch {
@@ -103,6 +107,7 @@ async function main(): Promise<void> {
     const polled = input.poll();
     drive = polled.drive;
     if (polled.actions.toggleDebug) debug.toggle();
+    if (polled.actions.toggleTuning) tuning.toggle();
     if (polled.actions.toggleCamera) chase.toggleMode();
     if (polled.actions.resetVehicle && input.enabled) vehicle.reset();
     chase.orbit(polled.actions.lookX * 900 * dt, polled.actions.lookY * 600 * dt);
