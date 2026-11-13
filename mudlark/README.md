@@ -18,7 +18,7 @@ npm run build    # dist/index.html = the whole game in one file
 |---|---|
 | `src/config.ts` | Every tuning value: car, surfaces, world generation, winch, water, damage, upgrades, sky |
 | `src/sim/` | Simulation only, no rendering: seeded RNG and noise, terrain, features, chunk physics, vehicle, winch, input |
-| `src/render/` | Three.js only: sky, terrain chunks with level of detail, instanced props, car model, rope, particles, camera |
+| `src/render/` | Three.js only: sky, water, terrain chunks with level of detail, painted textures, instanced trees and grass, car model, rope, particles, camera, screen effects |
 | `src/game/` | One play session: game rules (pebbles, camps, winch targeting, menus) and the save file |
 | `src/ui/` | HUD, camp and pause menu, tuning panel, debug overlay |
 | `src/audio/` | Generated engine, mud, water and winch sounds and background notes |

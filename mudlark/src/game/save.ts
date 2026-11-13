@@ -18,6 +18,8 @@ export interface SaveData {
   paints: string[];
   paint: string;
   muted: boolean;
+  /** Graphics setting. */
+  quality: 'high' | 'low';
   lastSeed: string;
   worlds: Record<string, WorldProgress>;
 }
@@ -25,7 +27,7 @@ export interface SaveData {
 const KEY = 'mudlark-save-v1';
 
 function fresh(): SaveData {
-  return { pebbles: 0, upgrades: [], vehicles: ['short'], vehicle: 'short', paints: ['sage'], paint: 'sage', muted: false, lastSeed: '', worlds: {} };
+  return { pebbles: 0, upgrades: [], vehicles: ['short'], vehicle: 'short', paints: ['sage'], paint: 'sage', muted: false, quality: 'high', lastSeed: '', worlds: {} };
 }
 
 export function loadSave(): SaveData {

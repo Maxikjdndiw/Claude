@@ -6,7 +6,8 @@ import { chunkKey, type ChunkObjects } from '../sim/world/objects';
 import type { Terrain } from '../sim/world/terrain';
 import { PINE_COLORS, Props, ROUND_COLORS } from './props';
 import type { SkyUniforms } from './scene';
-import { buildChunkGeometry, makeDetailTexture, type ChunkMeshData } from './terrainMesh';
+import { buildChunkGeometry, type ChunkMeshData } from './terrainMesh';
+import { makeGroundTextures } from './textures';
 import { makeWater } from './water';
 
 interface ChunkView {
@@ -25,6 +26,36 @@ function cellsFor(distance: number): number {
   return WORLD.chunkCells / 8;
 }
 
+/**
+ * Ground material: vertex colours, fine grain and bumps, a second, much
+ * larger pass of the grain to hide the repetition, and a darker wet band
+ * where the land meets the water.
+ */
+function makeTerrainMaterial(): THREE.MeshLambertMaterial {
+  const { detail, normal } = makeGroundTextures();
+  const material = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    map: detail,
+    normalMap: normal,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+  });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vHeight;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHeight = position.y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vHeight;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        diffuseColor.rgb *= 0.74 + 0.52 * texture2D(map, vMapUv * 0.083).r;
+        float wet = 1.0 - smoothstep(0.02, 0.5, vHeight);
+        diffuseColor.rgb *= 1.0 - 0.42 * wet;`,
+      );
+  };
+  return material;
+}
+
 const dummy = new THREE.Object3D();
 const tint = new THREE.Color();
 const tintB = new THREE.Color();
@@ -35,7 +66,12 @@ const variantOf = (turn: number, count: number) => Math.floor(turn * 977) % coun
 export class WorldView {
   readonly group = new THREE.Group();
   private props = new Props();
-  private terrainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: makeDetailTexture(), side: THREE.DoubleSide });
+  private terrainMaterial = makeTerrainMaterial();
+  /** 1 = full grass, lower values thin it out (the "low" graphics setting). */
+  grassDensity = 1;
+  /** False on the "low" graphics setting: plain trees everywhere and no bumps on the ground. */
+  private fullDetail = true;
+  private groundBumps: THREE.Texture | null;
   private chunks = new Map<string, ChunkView>();
   private queue: { cx: number; cz: number; cells: number; distance: number }[] = [];
   private pebbles = new Map<string, THREE.Mesh>();
@@ -51,6 +87,7 @@ export class WorldView {
     sky: SkyUniforms,
     fog: THREE.Fog,
   ) {
+    this.groundBumps = this.terrainMaterial.normalMap;
     this.water = makeWater(sky, fog);
     this.group.add(this.water);
   }
@@ -155,11 +192,12 @@ export class WorldView {
       // Trees: one instanced mesh per tree type and colour.
       for (let type = 0; type < 3; type++) {
         // Detailed models close by, simple ones in the middle distance.
-        const variants = (medium ? props.trees : props.simpleTrees)[type];
+        const detailed = near && this.fullDetail;
+        const variants = (detailed ? props.trees : props.simpleTrees)[type];
         for (let variant = 0; variant < variants.length; variant++) {
           const list = objects.trees.filter((t) => t.type === type && variantOf(t.turn, variants.length) === variant);
           if (list.length === 0) continue;
-          const mesh = new THREE.InstancedMesh(variants[variant], props.material, list.length);
+          const mesh = new THREE.InstancedMesh(variants[variant], detailed ? props.foliageMaterial : props.material, list.length);
           list.forEach((t, i) => {
             dummy.position.set(t.x, t.y - 0.15, t.z);
             dummy.rotation.set(0, t.turn * Math.PI * 2, 0);
@@ -241,7 +279,7 @@ export class WorldView {
   private addGrass(cx: number, cz: number, cells: number, data: ChunkMeshData, group: THREE.Group): void {
     const size = WORLD.chunkSize;
     const near = cells === WORLD.chunkCells;
-    const tries = near ? 4200 : 900;
+    const tries = Math.round((near ? 4400 : 900) * this.grassDensity);
     const n = cells + 1;
     const spots: number[] = [];
     let s = (Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663)) | 0;
@@ -267,14 +305,14 @@ export class WorldView {
     }
     if (spots.length === 0) return;
     const mesh = new THREE.InstancedMesh(this.props.grass, this.props.grassMaterial, spots.length / 4);
-    const width = near ? 1.1 : 2.3; // fewer, wider tufts further away
+    const width = near ? 1.0 : 2.0; // fewer, wider tufts further away
     for (let i = 0; i < spots.length; i += 4) {
       const x = spots[i];
       const z = spots[i + 2];
       const scale = spots[i + 3];
       dummy.position.set(x, spots[i + 1] - 0.06, z);
       dummy.rotation.set(0, scale * 9, 0);
-      dummy.scale.set(scale * width, scale * (near ? 1 : 1.25), scale * width);
+      dummy.scale.set(scale * width, scale * (near ? 0.95 : 1.2), scale * width);
       dummy.updateMatrix();
       mesh.setMatrixAt(i / 4, dummy.matrix);
       // Patches drift between gold and orange.
@@ -283,6 +321,21 @@ export class WorldView {
     }
     mesh.receiveShadow = near;
     group.add(mesh);
+  }
+
+  /** Switches between the full and the light version of the world and rebuilds what is drawn. */
+  setDetail(full: boolean): void {
+    this.fullDetail = full;
+    this.grassDensity = full ? 1 : 0.35;
+    this.terrainMaterial.normalMap = full ? this.groundBumps : null;
+    this.terrainMaterial.needsUpdate = true;
+    this.rebuild();
+  }
+
+  /** Throws away all built chunks so they are built again. */
+  rebuild(): void {
+    for (const key of [...this.chunks.keys()]) this.remove(key);
+    this.centre = { cx: 1e9, cz: 1e9 };
   }
 
   /** Hides a pebble that was just picked up. */

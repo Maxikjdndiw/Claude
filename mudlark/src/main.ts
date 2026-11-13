@@ -37,6 +37,7 @@ async function main(): Promise<void> {
   await PhysicsWorld.load();
 
   const scene = new GameScene(canvas);
+  scene.setQuality(save.quality);
   const chase = new ChaseCamera(canvas);
   const input = new Input();
   const hud = new Hud();
@@ -109,6 +110,20 @@ async function main(): Promise<void> {
     if (e.code === 'Escape' && menu.visible) menu.close();
   });
 
+  // If the game runs slowly on high graphics for a while, switch to low by itself.
+  let slowSeconds = 0;
+  const watchFrameRate = (dt: number) => {
+    if (!game.active || save.quality !== 'high' || menu.visible || document.hidden) return;
+    slowSeconds = debug.fps > 0 && debug.fps < 27 ? slowSeconds + dt : 0;
+    if (slowSeconds > 6) {
+      slowSeconds = 0;
+      save.quality = 'low';
+      storeSave(save);
+      game.applyQuality();
+      hud.say('Graphics set to low for smoother driving. Change it in the menu (Tab).');
+    }
+  };
+
   let last = performance.now();
   function frame(now: number): void {
     requestAnimationFrame(frame);
@@ -117,7 +132,8 @@ async function main(): Promise<void> {
     const { drive, actions } = input.poll();
     chase.orbit(actions.lookX * 900 * dt, actions.lookY * 600 * dt);
     game.frame(dt, drive, actions);
-    scene.renderer.render(scene.scene, chase.camera);
+    watchFrameRate(dt);
+    scene.render(chase.camera);
   }
   requestAnimationFrame(frame);
 

@@ -86,6 +86,7 @@ export class Game {
     this.chunkPhysics = new ChunkPhysics(this.physics, this.terrain, (cx, cz) => this.objectsOf(cx, cz));
     this.view = new WorldView(this.terrain, (cx, cz) => this.objectsOf(cx, cz), (id) => this.collected.has(id), deps.scene.sky, deps.scene.scene.fog as THREE.Fog);
 
+    this.view.setDetail(deps.save.quality === 'high');
     this.marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.28), new THREE.MeshBasicMaterial({ color: 0xffc44d }));
     this.marker.visible = false;
     deps.scene.scene.add(this.view.group, this.rope.group, this.particles.points, this.marker);
@@ -395,10 +396,28 @@ export class Game {
             action: save.muted ? 'Turn on' : 'Turn off',
             onClick: () => { save.muted = !save.muted; sound.setMuted(save.muted); storeSave(save); this.openPauseMenu(); },
           },
+          {
+            title: 'Graphics',
+            detail: save.quality === 'high' ? 'High: glow, colour grading, full grass.' : 'Low: plain picture, less grass. Use this if the game runs slowly.',
+            action: save.quality === 'high' ? 'Switch to low' : 'Switch to high',
+            onClick: () => {
+              save.quality = save.quality === 'high' ? 'low' : 'high';
+              this.applyQuality();
+              storeSave(save);
+              this.openPauseMenu();
+            },
+          },
           { title: 'Title screen', detail: 'Choose another seed. Your progress is kept.', action: 'Leave', onClick: () => { menu.close(); onQuit(); } },
         ],
       },
     ]);
+  }
+
+  /** Applies the graphics setting stored in the save. */
+  applyQuality(): void {
+    const { save, scene } = this.deps;
+    scene.setQuality(save.quality);
+    this.view.setDetail(save.quality === 'high');
   }
 
   // --- one frame -------------------------------------------------------------------

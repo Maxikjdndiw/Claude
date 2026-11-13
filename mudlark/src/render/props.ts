@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { campLayout } from '../sim/world/objects';
 import type { Feature } from '../sim/world/terrain';
+import { ATLAS, makeFoliageAtlas, makeGrassTexture } from './textures';
 
 /** A repeatable pseudo-random number from a position (so shared corners move together). */
 function hash3(x: number, y: number, z: number): number {
@@ -17,6 +18,8 @@ interface PartOptions {
   jitter?: number;
   /** Brightness at the bottom and top of the part (blended over its height). */
   shade?: [number, number];
+  /** Which part of the foliage atlas to show, and how often it repeats around. Without it the part is plain. */
+  atlas?: { region: readonly [number, number]; repeat: number };
 }
 
 /** Colours a geometry, optionally roughens and shades it, and moves it into place. */
@@ -44,7 +47,13 @@ function part(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0, opt
   }
   g.translate(x, y, z);
   g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  g.deleteAttribute('uv');
+  const uv = g.attributes.uv;
+  if (options.atlas && uv) {
+    const [v0, v1] = options.atlas.region;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * options.atlas.repeat, v0 + (v1 - v0) * uv.getY(i));
+  } else {
+    g.deleteAttribute('uv');
+  }
   g.deleteAttribute('normal');
   return g;
 }
@@ -65,43 +74,60 @@ const BARK = 0x5e4330;
 
 // --- detailed models, used close to the player --------------------------------------
 
-/** A tall conifer: many drooping tiers, dark inside and bright at the branch tips. */
+const barkUv = { region: ATLAS.bark, repeat: 2 };
+
+/**
+ * A tall conifer. Each tier is a cone-shaped skirt painted with hanging
+ * branches; the gaps in the painting are see-through, which gives the ragged
+ * outline of a real fir.
+ */
 function pine(color: number): THREE.BufferGeometry {
-  const parts = [part(new THREE.CylinderGeometry(0.07, 0.22, 7.2, 7), BARK, 0, 3.6, 0, { shade: [0.8, 1.1] })];
+  const parts = [part(new THREE.CylinderGeometry(0.06, 0.24, 7.6, 8), BARK, 0, 3.8, 0, { shade: [0.8, 1.1], atlas: barkUv })];
   const TIERS = 9;
   for (let i = 0; i < TIERS; i++) {
     const t = i / (TIERS - 1);
-    const radius = 1.55 - t * 1.2;
-    const height = 1.5 - t * 0.5;
-    const cone = new THREE.ConeGeometry(radius, height, 9, 2, true);
+    const radius = 1.75 - t * 1.45;
+    const height = 1.7 - t * 0.7;
+    const cone = new THREE.ConeGeometry(radius, height, 10, 1, true);
     cone.rotateY(i * 0.7);
-    // The rim of each tier (the branch tips) catches the light; the top hides under the next tier.
-    parts.push(part(cone, color, 0, 1.7 + t * 5.2, 0, { jitter: 0.13, shade: [1.12, 0.62] }));
+    // The top of each tier hides under the next one, so it is darker.
+    parts.push(
+      part(cone, color, 0, 1.6 + t * 5.9, 0, {
+        jitter: 0.1,
+        shade: [1.15, 0.6],
+        atlas: { region: ATLAS.needle, repeat: Math.max(1, Math.round(radius * 2.2)) },
+      }),
+    );
   }
   return mergeSmooth(parts);
 }
 
-/** A leaf tree: a lumpy crown made of several rounded masses. */
+/** A leaf tree: a crown of leafy shells with gaps, around darker inner masses. */
 function roundTree(color: number): THREE.BufferGeometry {
-  const crown = (r: number, x: number, y: number, z: number) =>
-    part(new THREE.IcosahedronGeometry(r, 1), color, x, y, z, { jitter: 0.16, shade: [0.66, 1.14] });
+  const leafUv = { region: ATLAS.leaf, repeat: 3 };
+  const crown = (r: number, x: number, y: number, z: number) => [
+    part(new THREE.IcosahedronGeometry(r, 1), color, x, y, z, { jitter: 0.18, shade: [0.7, 1.18], atlas: leafUv }),
+  ];
+  // One dark mass in the middle shows through the gaps between the leaves.
+  const core = part(new THREE.IcosahedronGeometry(1.25, 1), color, 0.05, 3.6, -0.1, { jitter: 0.1, shade: [0.38, 0.55], atlas: { region: ATLAS.bark, repeat: 1 } });
   const branch = (angle: number, turn: number) => {
-    const g = new THREE.CylinderGeometry(0.05, 0.09, 1.5, 5);
-    g.translate(0, 0.75, 0);
+    const g = new THREE.CylinderGeometry(0.05, 0.09, 1.6, 5);
+    g.translate(0, 0.8, 0);
     g.rotateZ(angle);
     g.rotateY(turn);
-    return part(g, BARK, 0, 2.0, 0);
+    return part(g, BARK, 0, 2.0, 0, { atlas: barkUv });
   };
   return mergeSmooth([
-    part(new THREE.CylinderGeometry(0.13, 0.26, 2.9, 7), BARK, 0, 1.45, 0, { shade: [0.8, 1.1] }),
+    part(new THREE.CylinderGeometry(0.13, 0.27, 3.0, 8), BARK, 0, 1.5, 0, { shade: [0.8, 1.1], atlas: barkUv }),
     branch(0.8, 0.3),
     branch(-0.7, 1.9),
     branch(0.75, 3.6),
-    crown(1.45, 0, 3.7, 0),
-    crown(1.05, 1.0, 3.0, 0.35),
-    crown(0.95, -0.85, 3.2, -0.55),
-    crown(0.9, 0.15, 3.1, -1.0),
-    crown(0.85, 0.2, 4.6, 0.25),
+    core,
+    ...crown(1.5, 0, 3.8, 0),
+    ...crown(1.1, 1.05, 3.1, 0.35),
+    ...crown(1.0, -0.9, 3.3, -0.55),
+    ...crown(0.95, 0.15, 3.2, -1.05),
+    ...crown(0.9, 0.2, 4.75, 0.25),
   ]);
 }
 
@@ -156,41 +182,28 @@ function post(): THREE.BufferGeometry {
 }
 
 /**
- * A tuft of tall grass: thin blades that bend over towards the tip.
- * Vertex colours run from dark at the root to bright at the tip; the hue
- * comes from the instance colour. All normals point up so the tuft is lit evenly.
+ * A tuft of tall grass: three upright cards that cross in the middle, each
+ * showing the painted clump of blades. All normals point up so the tuft is
+ * lit evenly from every side.
  */
 function grassTuft(): THREE.BufferGeometry {
   const positions: number[] = [];
-  const colors: number[] = [];
-  const BLADES = 9;
-  for (let i = 0; i < BLADES; i++) {
-    const angle = (i / BLADES) * Math.PI * 2 + i * 0.7;
-    const out = 0.05 + (i % 4) * 0.09; // distance of the root from the centre
-    const height = 0.65 + ((i * 5) % 4) * 0.14;
-    const lean = 0.16 + (i % 3) * 0.12;
-    const cx = Math.cos(angle);
-    const cz = Math.sin(angle);
-    const rx = cx * out;
-    const rz = cz * out;
-    const w = 0.042; // half width at the root
-    // root left, root right, middle left, middle right, tip
-    const p = [
-      [rx - cz * w, 0, rz + cx * w],
-      [rx + cz * w, 0, rz - cx * w],
-      [rx + cx * lean * 0.35 - cz * w * 0.7, height * 0.55, rz + cz * lean * 0.35 + cx * w * 0.7],
-      [rx + cx * lean * 0.35 + cz * w * 0.7, height * 0.55, rz + cz * lean * 0.35 - cx * w * 0.7],
-      [rx + cx * lean, height, rz + cz * lean],
-    ];
-    const shade = [0.62, 0.62, 0.95, 0.95, 1.2];
-    for (const k of [0, 1, 2, 2, 1, 3, 2, 3, 4]) {
-      positions.push(...p[k]);
-      colors.push(shade[k], shade[k], shade[k]);
+  const uvs: number[] = [];
+  const CARDS = 2;
+  for (let i = 0; i < CARDS; i++) {
+    const angle = (i / CARDS) * Math.PI + 0.4;
+    const dx = Math.cos(angle) * 0.6;
+    const dz = Math.sin(angle) * 0.6;
+    // Two triangles: bottom-left, bottom-right, top-right, top-left.
+    const corners = [[-dx, 0, -dz, 0, 0], [dx, 0, dz, 1, 0], [dx, 1, dz, 1, 1], [-dx, 1, -dz, 0, 1]];
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      positions.push(corners[k][0], corners[k][1], corners[k][2]);
+      uvs.push(corners[k][3], corners[k][4]);
     }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   const normals = new Float32Array(positions.length);
   for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
   g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
@@ -216,13 +229,21 @@ export class Props {
   readonly grass = grassTuft();
   readonly pebble = new THREE.IcosahedronGeometry(0.3, 1);
   /** One shared material for everything with vertex colours. */
+  /** Plain material for rocks, posts and far-away trees. */
   readonly material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  /** Material for detailed trees: painted needles, leaves and bark, see-through where nothing is painted. */
+  readonly foliageMaterial = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    map: makeFoliageAtlas(),
+    alphaTest: 0.45,
+    side: THREE.DoubleSide,
+  });
   readonly pebbleMaterial = new THREE.MeshLambertMaterial({ color: 0xfff0c2, emissive: 0xe0a030, emissiveIntensity: 0.9 });
   private fireMaterial = new THREE.MeshBasicMaterial({ color: 0xffa040 });
   private windowMaterial = new THREE.MeshBasicMaterial({ color: 0xffd98a });
 
   private makeGrassMaterial(): THREE.MeshLambertMaterial {
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const material = new THREE.MeshLambertMaterial({ map: makeGrassTexture(), alphaTest: 0.4, side: THREE.DoubleSide });
     // Small shader additions: sway in the wind, and light both sides of a blade the same: push the tips sideways with a slow wave.
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.grassTime;
@@ -233,8 +254,8 @@ export class Props {
           `#include <begin_vertex>
           #ifdef USE_INSTANCING
             float wave = sin(uTime * 1.6 + instanceMatrix[3].x * 0.31 + instanceMatrix[3].z * 0.27);
-            transformed.x += wave * 0.11 * transformed.y * transformed.y;
-            transformed.z += wave * 0.05 * transformed.y * transformed.y;
+            transformed.x += wave * 0.16 * transformed.y * transformed.y;
+            transformed.z += wave * 0.07 * transformed.y * transformed.y;
           #endif`,
         );
       shader.fragmentShader = shader.fragmentShader.replace(

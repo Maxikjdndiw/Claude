@@ -1,7 +1,30 @@
 // Renderer, sky (gradient, sun, clouds, stars), fog, sunlight and the
 // day/night cycle. Rendering only.
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { SKY } from '../config';
+
+/** Final touch on the picture: a little more contrast and colour, darker corners. */
+const GRADE_SHADER = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float luma = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(luma), c.rgb, 1.12);            // saturation
+      c.rgb = mix(c.rgb, c.rgb * c.rgb * (3.0 - 2.0 * min(c.rgb, 1.0)), 0.12); // gentle contrast below white
+      vec2 d = vUv - 0.5;
+      c.rgb *= 1.0 - dot(d, d) * 0.55;                 // vignette
+      gl_FragColor = c;
+    }`,
+};
 
 /** Look of the sky for a given height of the sun (-1 = midnight, 1 = noon). */
 interface SkyKey {
@@ -129,6 +152,10 @@ export class GameScene {
   private reflectionAge = 99;
   private a = new THREE.Color();
   private b = new THREE.Color();
+  private composer: EffectComposer | null = null;
+  private renderPass: RenderPass | null = null;
+  /** "high" adds bloom, colour grading and smoother edges; "low" draws the plain picture. */
+  quality: 'high' | 'low' = 'high';
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -220,7 +247,45 @@ export class GameScene {
     this.sun.position.copy(target).add(this.sunOffset);
   }
 
+  setQuality(quality: 'high' | 'low'): void {
+    this.quality = quality;
+    // Low draws fewer pixels on sharp screens and a smaller shadow map.
+    this.renderer.setPixelRatio(quality === 'high' ? Math.min(window.devicePixelRatio, 2) : 1);
+    const size = quality === 'high' ? 2048 : 1024;
+    if (this.sun.shadow.mapSize.x !== size) {
+      this.sun.shadow.mapSize.set(size, size);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    const canvas = this.renderer.domElement;
+    this.resize(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight);
+  }
+
+  /** Draws one frame, with or without the extra effects. */
+  render(camera: THREE.Camera): void {
+    if (this.quality === 'low') {
+      this.renderer.render(this.scene, camera);
+      return;
+    }
+    if (!this.composer) {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      // The picture is drawn into a high-range buffer first, so very bright
+      // spots (sun, lamps, fire) can glow.
+      const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+      this.composer = new EffectComposer(this.renderer, target);
+      this.renderPass = new RenderPass(this.scene, camera);
+      this.composer.addPass(this.renderPass);
+      this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.14, 0.6, 1.25));
+      this.composer.addPass(new OutputPass());
+      this.composer.addPass(new ShaderPass(GRADE_SHADER));
+    }
+    this.renderPass!.camera = camera;
+    this.composer.render();
+  }
+
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
+    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer?.setSize(width, height);
   }
 }

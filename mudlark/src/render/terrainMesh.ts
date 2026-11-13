@@ -10,8 +10,8 @@ const COLORS = {
   meadow: C(0xc9a04e),
   forestGrass: C(0xb98a40),
   highGrass: C(0xc9a65e),
-  forestFloor: C(0x99663a),
-  dirt: C(0x7a5540),
+  forestFloor: C(0x8a6540),
+  dirt: C(0x6f5a48),
   mud: C(0x5b4032),
   deepMud: C(0x3e2b23),
   rock: C(0x8a84a6),
@@ -56,55 +56,6 @@ function groundColor(g: GroundInfo, variation: number, out: THREE.Color): number
   return g.height > 0.4 && g.slope < 0.75 ? grass : 0;
 }
 
-/** A tileable grey texture with fine grain and soft blotches. It is multiplied onto the ground colours. */
-export function makeDetailTexture(): THREE.Texture {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  const image = ctx.createImageData(size, size);
-  let s = 12345;
-  const rnd = () => {
-    s = (Math.imul(s, 1664525) + 1013904223) | 0;
-    return (s >>> 8) / 16777216;
-  };
-  // Value noise on a wrapping grid, so the texture repeats without seams.
-  const layer = (cells: number) => {
-    const grid = new Float32Array(cells * cells);
-    for (let i = 0; i < grid.length; i++) grid[i] = rnd();
-    return (x: number, y: number) => {
-      const gx = (x / size) * cells;
-      const gy = (y / size) * cells;
-      const x0 = Math.floor(gx);
-      const y0 = Math.floor(gy);
-      let fx = gx - x0;
-      let fy = gy - y0;
-      fx = fx * fx * (3 - 2 * fx);
-      fy = fy * fy * (3 - 2 * fy);
-      const at = (i: number, j: number) => grid[(((j % cells) + cells) % cells) * cells + (((i % cells) + cells) % cells)];
-      return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
-    };
-  };
-  const coarse = layer(6);
-  const medium = layer(24);
-  const fine = layer(96);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const v = 0.62 + coarse(x, y) * 0.14 + medium(x, y) * 0.14 + fine(x, y) * 0.1 + rnd() * 0.06;
-      const c = Math.round(Math.min(1, v) * 255);
-      const i = (y * size + x) * 4;
-      image.data[i] = image.data[i + 1] = image.data[i + 2] = c;
-      image.data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(image, 0, 0);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
 export interface ChunkMeshData {
   geometry: THREE.BufferGeometry;
   /** Heights at the grid corners, index = ix * (cells + 1) + iz. */
@@ -140,7 +91,7 @@ export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cel
   const uvs = new Float32Array(vertexCount * 2);
   const heights = new Float32Array(n * n);
   const grassAt = new Uint8Array(n * n);
-  const TILE = 7; // metres per repeat of the detail texture
+  const TILE = 5; // metres per repeat of the detail texture
 
   for (let ix = 0; ix < n; ix++) {
     for (let iz = 0; iz < n; iz++) {
@@ -192,7 +143,9 @@ export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cel
     for (let k = 0; k < cells; k++) {
       const a = indexOf(k);
       const b = indexOf(k + 1);
+      // Both windings, so the skirt is visible from either side.
       indices.push(a, b, first + k, b, first + k + 1, first + k);
+      indices.push(b, a, first + k, first + k + 1, b, first + k);
     }
   };
   edge((k) => k); // ix = 0
