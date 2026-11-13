@@ -4,29 +4,36 @@ import { WORLD } from '../config';
 import type { GroundInfo, Terrain } from '../sim/world/terrain';
 
 const C = (hex: number) => new THREE.Color(hex);
+// Autumn palette: golden grass, dark earth tracks, blue-violet rock.
 const COLORS = {
-  meadow: C(0x93b05f),
-  forestGrass: C(0x7fa055),
-  highGrass: C(0x9aa870),
-  forestFloor: C(0x6e7d48),
-  dirt: C(0xa98d64),
-  mud: C(0x7a5a3c),
-  deepMud: C(0x553b26),
-  rock: C(0x9a9187),
-  gravel: C(0x8f8d7e),
-  snow: C(0xf4f1ea),
-  riverBed: C(0x5f6f62),
+  meadow: C(0xd9a744),
+  forestGrass: C(0xcc9038),
+  highGrass: C(0xc9a65e),
+  forestFloor: C(0xa8672e),
+  dirt: C(0x6e4b36),
+  mud: C(0x5b4032),
+  deepMud: C(0x3e2b23),
+  rock: C(0x8a84a6),
+  gravel: C(0x8f89a6),
+  snow: C(0xf6f1ee),
+  riverBed: C(0x3d6d8a),
 };
 const tmp = new THREE.Color();
 
-/** Colour of a piece of ground. `variation` is a number in 0..1 that differs per face. */
-function groundColor(g: GroundInfo, variation: number, out: THREE.Color): void {
+/**
+ * Colour of a piece of ground. `variation` is a number in 0..1 that differs per face.
+ * Returns how much tall grass grows there: 0 = none, 1 = some, 2 = a lot.
+ */
+function groundColor(g: GroundInfo, variation: number, out: THREE.Color): number {
+  let grass = 0;
   switch (g.surface) {
     case 'grass':
       out.copy(g.biome === 'forest' ? COLORS.forestGrass : g.biome === 'mountain' ? COLORS.highGrass : COLORS.meadow);
+      grass = 2;
       break;
     case 'dirt':
       out.copy(g.biome === 'forest' ? COLORS.forestFloor : COLORS.dirt);
+      grass = g.biome === 'forest' ? 1 : 0;
       break;
     case 'mud':
       out.copy(COLORS.mud);
@@ -44,12 +51,21 @@ function groundColor(g: GroundInfo, variation: number, out: THREE.Color): void {
   }
   if (g.waterDepth > 0) out.lerp(COLORS.riverBed, Math.min(0.8, g.waterDepth * 0.7));
   out.multiplyScalar(0.94 + variation * 0.12);
+  return g.height > 0.4 && g.slope < 0.75 ? grass : 0;
+}
+
+export interface ChunkMeshData {
+  geometry: THREE.BufferGeometry;
+  /** Heights at the grid corners, index = ix * (cells + 1) + iz. */
+  heights: Float32Array;
+  /** Tall-grass amount per cell (0, 1 or 2), index = ix * cells + iz. */
+  grass: Uint8Array;
 }
 
 /**
  * @param cells  grid cells per side: 32 near the player, fewer far away (level of detail)
  */
-export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cells: number): THREE.BufferGeometry {
+export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cells: number): ChunkMeshData {
   const size = WORLD.chunkSize;
   const step = size / cells;
   const x0 = cx * size;
@@ -57,6 +73,7 @@ export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cel
   const n = cells + 1;
 
   const heights = new Float32Array(n * n);
+  const grass = new Uint8Array(cells * cells);
   for (let ix = 0; ix < n; ix++) {
     for (let iz = 0; iz < n; iz++) heights[ix * n + iz] = terrain.height(x0 + ix * step, z0 + iz * step);
   }
@@ -93,7 +110,7 @@ export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cel
       const info = terrain.classify(xa + step / 2, za + step / 2, (h00 + h10 + h01 + h11) / 4, Math.sqrt(sx * sx + sz * sz));
       // Cheap per-face variation (rendering only, does not need to be exact).
       const variation = (((ix * 7 + iz * 13 + cx * 3 + cz * 5) % 9) + 9) % 9 / 8;
-      groundColor(info, variation, tmp);
+      grass[ix * cells + iz] = groundColor(info, variation, tmp);
       put(xa, h00, za); put(xa, h01, zb); put(xb, h10, za);
       tmp.multiplyScalar(0.97);
       put(xb, h10, za); put(xa, h01, zb); put(xb, h11, zb);
@@ -111,5 +128,5 @@ export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cel
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.computeVertexNormals(); // every triangle has its own vertices, so this gives flat shading
   geometry.computeBoundingSphere();
-  return geometry;
+  return { geometry, heights, grass };
 }

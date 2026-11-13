@@ -32,7 +32,7 @@ export const WORLD = {
   /** Grid cells per chunk side at full detail (2 m per cell). */
   chunkCells: 32,
   /** Chunks drawn around the player in every direction. */
-  viewRadius: 4,
+  viewRadius: 6,
   /** Chunks around the player that have physics. */
   physicsRadius: 1,
   /** Camps and challenge spots are generated per region of this size. */
@@ -243,5 +243,5 @@ export const SKY = {
   /** Length of a full day and night in real minutes. */
   dayLengthMinutes: 18,
   /** Time of day a new game starts at: 0 = midnight, 0.5 = noon. */
-  startTime: 0.36,
+  startTime: 0.31,
 };

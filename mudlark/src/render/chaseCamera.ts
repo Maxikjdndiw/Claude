@@ -10,7 +10,7 @@ function angleDelta(a: number, b: number): number {
 }
 
 export class ChaseCamera {
-  readonly camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, 0.1, 600);
+  readonly camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, 0.1, 1200);
   mode: CameraMode = 'chase';
 
   private yaw = Math.PI; // direction the camera looks along, around the car

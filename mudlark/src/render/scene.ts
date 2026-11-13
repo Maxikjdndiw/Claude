@@ -5,18 +5,24 @@ import { SKY } from '../config';
 /** Look of the sky for a given height of the sun (-1 = midnight, 1 = noon). */
 interface SkyKey {
   h: number;
-  sky: number;
+  /** Colour at the horizon; the fog has the same colour, so far hills fade into it. */
+  horizon: number;
+  /** Colour straight up. */
+  zenith: number;
   sun: number;
   sunPower: number;
+  /** Light from the sky (fills the shadows) and bounce light from the ground. */
+  skyLight: number;
+  groundLight: number;
   ambient: number;
 }
 const KEYS: SkyKey[] = [
-  { h: -1.0, sky: 0x18233a, sun: 0x8fa8d8, sunPower: 0.55, ambient: 0.5 },
-  { h: -0.25, sky: 0x1f2c48, sun: 0x8fa8d8, sunPower: 0.5, ambient: 0.5 },
-  { h: -0.06, sky: 0x77688a, sun: 0xff9e6b, sunPower: 0.25, ambient: 0.7 },
-  { h: 0.1, sky: 0xf3c29a, sun: 0xffb070, sunPower: 1.9, ambient: 0.9 },
-  { h: 0.4, sky: 0xd9e3dc, sun: 0xffdfb0, sunPower: 2.5, ambient: 1.1 },
-  { h: 1.0, sky: 0xcfe2e6, sun: 0xfff0d2, sunPower: 2.6, ambient: 1.15 },
+  { h: -1.0, horizon: 0x222f52, zenith: 0x0c1226, sun: 0x8fa8d8, sunPower: 0.55, skyLight: 0x6f84c4, groundLight: 0x2a2f4a, ambient: 0.75 },
+  { h: -0.25, horizon: 0x2a3560, zenith: 0x0f1630, sun: 0x8fa8d8, sunPower: 0.5, skyLight: 0x6f84c4, groundLight: 0x2a2f4a, ambient: 0.75 },
+  { h: -0.06, horizon: 0xd8768a, zenith: 0x47467a, sun: 0xff9e6b, sunPower: 0.3, skyLight: 0x8f7fc0, groundLight: 0x7a4a52, ambient: 0.85 },
+  { h: 0.1, horizon: 0xffb27a, zenith: 0x8d84b8, sun: 0xffa55c, sunPower: 2.1, skyLight: 0xa894d6, groundLight: 0xb86a3c, ambient: 0.95 },
+  { h: 0.42, horizon: 0x9ccbd9, zenith: 0x4c8fc4, sun: 0xffd9a0, sunPower: 2.5, skyLight: 0x9db6ee, groundLight: 0xb8793f, ambient: 1.05 },
+  { h: 1.0, horizon: 0x93c6dc, zenith: 0x3d86c8, sun: 0xfff0d2, sunPower: 2.6, skyLight: 0xa6c0f0, groundLight: 0xb8793f, ambient: 1.1 },
 ];
 
 export class GameScene {
@@ -31,6 +37,8 @@ export class GameScene {
   private ambient: THREE.HemisphereLight;
   private sunOffset = new THREE.Vector3();
   private skyColor = new THREE.Color();
+  private zenithColor = new THREE.Color();
+  private dome: THREE.Mesh;
   private a = new THREE.Color();
   private b = new THREE.Color();
 
@@ -41,7 +49,24 @@ export class GameScene {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.scene.background = this.skyColor;
-    this.scene.fog = new THREE.Fog(0xffffff, 60, 250);
+    this.scene.fog = new THREE.Fog(0xffffff, 70, 430);
+
+    // Sky dome: a big sphere around the camera, coloured from horizon to zenith.
+    this.dome = new THREE.Mesh(
+      new THREE.SphereGeometry(850, 24, 12),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        uniforms: { horizon: { value: this.skyColor }, zenith: { value: this.zenithColor } },
+        vertexShader: 'varying float vUp; void main() { vUp = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader:
+          'uniform vec3 horizon; uniform vec3 zenith; varying float vUp;' +
+          'void main() { gl_FragColor = vec4(mix(horizon, zenith, smoothstep(0.02, 0.55, vUp)), 1.0);\n#include <colorspace_fragment>\n}',
+      }),
+    );
+    this.dome.renderOrder = -1;
+    this.scene.add(this.dome);
 
     this.ambient = new THREE.HemisphereLight(0xcfe3ff, 0x8a6a45, 1.1);
     this.sun = new THREE.DirectionalLight(0xffd9a3, 2.4);
@@ -70,7 +95,10 @@ export class GameScene {
     const k0 = KEYS[i];
     const k1 = KEYS[i + 1];
     const t = THREE.MathUtils.clamp((h - k0.h) / (k1.h - k0.h), 0, 1);
-    this.skyColor.copy(this.a.setHex(k0.sky)).lerp(this.b.setHex(k1.sky), t);
+    this.skyColor.copy(this.a.setHex(k0.horizon)).lerp(this.b.setHex(k1.horizon), t);
+    this.zenithColor.copy(this.a.setHex(k0.zenith)).lerp(this.b.setHex(k1.zenith), t);
+    this.ambient.color.copy(this.a.setHex(k0.skyLight)).lerp(this.b.setHex(k1.skyLight), t);
+    this.ambient.groundColor.copy(this.a.setHex(k0.groundLight)).lerp(this.b.setHex(k1.groundLight), t);
     (this.scene.fog as THREE.Fog).color.copy(this.skyColor);
     this.sun.color.copy(this.a.setHex(k0.sun)).lerp(this.b.setHex(k1.sun), t);
     this.sun.intensity = THREE.MathUtils.lerp(k0.sunPower, k1.sunPower, t);
@@ -84,6 +112,7 @@ export class GameScene {
 
   /** The shadow area is small and follows the player, which keeps shadows sharp. */
   followWithSun(target: THREE.Vector3): void {
+    this.dome.position.copy(target);
     this.sun.target.position.copy(target);
     this.sun.position.copy(target).add(this.sunOffset);
   }

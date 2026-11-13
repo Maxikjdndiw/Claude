@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { WORLD } from '../config';
 import { chunkKey, type ChunkObjects } from '../sim/world/objects';
 import type { Terrain } from '../sim/world/terrain';
-import { Props } from './props';
-import { buildChunkGeometry } from './terrainMesh';
+import { PINE_COLORS, Props, ROUND_COLORS } from './props';
+import { buildChunkGeometry, type ChunkMeshData } from './terrainMesh';
 
 interface ChunkView {
   cx: number;
@@ -19,11 +19,16 @@ interface ChunkView {
 function cellsFor(distance: number): number {
   if (distance <= 1) return WORLD.chunkCells;
   if (distance === 2) return WORLD.chunkCells / 2;
-  return WORLD.chunkCells / 4;
+  if (distance <= 4) return WORLD.chunkCells / 4;
+  return WORLD.chunkCells / 8;
 }
 
 const dummy = new THREE.Object3D();
 const tint = new THREE.Color();
+const tintB = new THREE.Color();
+const FAR_COLORS = [PINE_COLORS, ROUND_COLORS, [0x77875a]];
+/** Which colour variant a tree gets (rendering only). */
+const variantOf = (turn: number, count: number) => Math.floor(turn * 977) % count;
 
 export class WorldView {
   readonly group = new THREE.Group();
@@ -44,7 +49,7 @@ export class WorldView {
   ) {
     this.water = new THREE.Mesh(
       new THREE.PlaneGeometry(2400, 2400),
-      new THREE.MeshLambertMaterial({ color: 0x4f9aa8, transparent: true, opacity: 0.8, depthWrite: false }),
+      new THREE.MeshLambertMaterial({ color: 0x3f86ad, transparent: true, opacity: 0.82, depthWrite: false }),
     );
     this.water.rotation.x = -Math.PI / 2;
     this.water.renderOrder = 1;
@@ -62,6 +67,7 @@ export class WorldView {
    */
   update(x: number, z: number, dt: number, budgetMs: number): void {
     this.time += dt;
+    this.props.grassTime.value = this.time;
     this.water.position.set(x, Math.sin(this.time * 0.6) * 0.03, z);
     for (const f of this.flames) f.scale.y = 1 + Math.sin(this.time * 9 + f.position.x) * 0.2;
     for (const mesh of this.pebbles.values()) {
@@ -123,7 +129,9 @@ export class WorldView {
     const near = cells === WORLD.chunkCells;
     const medium = cells >= WORLD.chunkCells / 2;
 
-    const ground = new THREE.Mesh(buildChunkGeometry(this.terrain, cx, cz, cells), this.terrainMaterial);
+    const far = cells < WORLD.chunkCells / 4;
+    const data = buildChunkGeometry(this.terrain, cx, cz, cells);
+    const ground = new THREE.Mesh(data.geometry, this.terrainMaterial);
     ground.userData.ownsGeometry = true;
     ground.receiveShadow = true;
     group.add(ground);
@@ -131,21 +139,39 @@ export class WorldView {
     const objects = this.objectsOf(cx, cz);
     const props = this.props;
 
-    // Trees: one instanced mesh per tree type.
-    for (let type = 0; type < 3; type++) {
-      const list = objects.trees.filter((t) => t.type === type);
-      if (list.length === 0) continue;
-      const mesh = new THREE.InstancedMesh(props.trees[type], props.material, list.length);
-      list.forEach((t, i) => {
-        dummy.position.set(t.x, t.y - 0.15, t.z);
-        dummy.rotation.set(0, t.turn * Math.PI * 2, 0);
-        dummy.scale.set(t.scale, t.scale * (0.9 + t.turn * 0.25), t.scale);
+    if (far && objects.trees.length > 0) {
+      // Far away every tree is one simple cone in the right colour.
+      const mesh = new THREE.InstancedMesh(props.farTree, props.material, objects.trees.length);
+      objects.trees.forEach((t, i) => {
+        dummy.position.set(t.x, t.y - 0.3, t.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(t.scale, t.scale, t.scale);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
-        mesh.setColorAt(i, tint.setScalar(0.86 + t.turn * 0.28));
+        const palette = FAR_COLORS[t.type];
+        mesh.setColorAt(i, tint.setHex(palette[variantOf(t.turn, palette.length)]).multiplyScalar(0.92));
       });
-      mesh.castShadow = near;
       group.add(mesh);
+    } else {
+      // Trees: one instanced mesh per tree type and colour.
+      for (let type = 0; type < 3; type++) {
+        const variants = props.trees[type];
+        for (let variant = 0; variant < variants.length; variant++) {
+          const list = objects.trees.filter((t) => t.type === type && variantOf(t.turn, variants.length) === variant);
+          if (list.length === 0) continue;
+          const mesh = new THREE.InstancedMesh(variants[variant], props.material, list.length);
+          list.forEach((t, i) => {
+            dummy.position.set(t.x, t.y - 0.15, t.z);
+            dummy.rotation.set(0, t.turn * Math.PI * 2, 0);
+            dummy.scale.set(t.scale, t.scale * (0.95 + t.turn * 0.35), t.scale);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(i, dummy.matrix);
+            mesh.setColorAt(i, tint.setScalar(0.9 + t.turn * 0.2));
+          });
+          mesh.castShadow = near;
+          group.add(mesh);
+        }
+      }
     }
 
     // Rocks: small ones only close to the player.
@@ -190,7 +216,7 @@ export class WorldView {
       }
     }
 
-    if (near) this.addGrass(cx, cz, group);
+    if (medium) this.addGrass(cx, cz, cells, data, group);
 
     // Camps centred in this chunk.
     const size = WORLD.chunkSize;
@@ -207,35 +233,54 @@ export class WorldView {
     this.chunks.set(key, view);
   }
 
-  /** Grass tufts are decoration only, so they use a simple pattern instead of the world generator. */
-  private addGrass(cx: number, cz: number, group: THREE.Group): void {
+  /**
+   * Tall grass. Decoration only, so it uses a simple pattern instead of the
+   * world generator, and reads heights from the chunk mesh that was just built.
+   */
+  private addGrass(cx: number, cz: number, cells: number, data: ChunkMeshData, group: THREE.Group): void {
     const size = WORLD.chunkSize;
+    const near = cells === WORLD.chunkCells;
+    const tries = near ? 4200 : 900;
+    const n = cells + 1;
     const spots: number[] = [];
-    let s = (cx * 73856093) ^ (cz * 19349663);
+    let s = (Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663)) | 0;
     const next = () => {
       s = (Math.imul(s, 1664525) + 1013904223) | 0;
       return (s >>> 8) / 16777216;
     };
-    for (let i = 0; i < 260; i++) {
-      const x = (cx + next()) * size;
-      const z = (cz + next()) * size;
-      const scale = 0.8 + next() * 0.9;
-      const g = this.terrain.classify(x, z, 5, 0); // rough check, without the costly height lookup
-      if (g.surface !== 'grass' && g.biome !== 'forest') continue;
-      const y = this.terrain.height(x, z);
-      if (y < 0.4) continue;
-      spots.push(x, y, z, scale);
+    for (let i = 0; i < tries; i++) {
+      const u = next() * cells;
+      const v = next() * cells;
+      const scale = 0.85 + next() * 0.8;
+      const keep = next();
+      const ix = Math.min(cells - 1, Math.floor(u));
+      const iz = Math.min(cells - 1, Math.floor(v));
+      const amount = data.grass[ix * cells + iz];
+      if (amount === 0 || (amount === 1 && keep > 0.45)) continue;
+      // Height between the 4 corners of the cell.
+      const fx = u - ix;
+      const fz = v - iz;
+      const h0 = data.heights[ix * n + iz] * (1 - fx) + data.heights[(ix + 1) * n + iz] * fx;
+      const h1 = data.heights[ix * n + iz + 1] * (1 - fx) + data.heights[(ix + 1) * n + iz + 1] * fx;
+      spots.push((cx + u / cells) * size, h0 * (1 - fz) + h1 * fz, (cz + v / cells) * size, scale);
     }
     if (spots.length === 0) return;
-    const mesh = new THREE.InstancedMesh(this.props.grass, this.props.material, spots.length / 4);
+    const mesh = new THREE.InstancedMesh(this.props.grass, this.props.grassMaterial, spots.length / 4);
+    const width = near ? 1.15 : 2.3; // fewer, wider tufts further away
     for (let i = 0; i < spots.length; i += 4) {
-      dummy.position.set(spots[i], spots[i + 1] - 0.05, spots[i + 2]);
-      dummy.rotation.set(0, spots[i + 3] * 9, 0);
-      dummy.scale.setScalar(spots[i + 3]);
+      const x = spots[i];
+      const z = spots[i + 2];
+      const scale = spots[i + 3];
+      dummy.position.set(x, spots[i + 1] - 0.06, z);
+      dummy.rotation.set(0, scale * 9, 0);
+      dummy.scale.set(scale * width, scale * (near ? 1 : 1.25), scale * width);
       dummy.updateMatrix();
       mesh.setMatrixAt(i / 4, dummy.matrix);
-      mesh.setColorAt(i / 4, tint.setScalar(0.85 + (spots[i + 3] - 0.8) * 0.35));
+      // Patches drift between gold and orange.
+      const patch = 0.5 + 0.5 * Math.sin(x * 0.045 + Math.sin(z * 0.038) * 2.1);
+      mesh.setColorAt(i / 4, tint.setHex(0xf0bd52).lerp(tintB.setHex(0xe58a36), patch * 0.8).multiplyScalar(1.25 + (scale - 0.85) * 0.2));
     }
+    mesh.receiveShadow = near;
     group.add(mesh);
   }
 
