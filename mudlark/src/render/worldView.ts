@@ -5,7 +5,9 @@ import { WORLD } from '../config';
 import { chunkKey, type ChunkObjects } from '../sim/world/objects';
 import type { Terrain } from '../sim/world/terrain';
 import { PINE_COLORS, Props, ROUND_COLORS } from './props';
-import { buildChunkGeometry, type ChunkMeshData } from './terrainMesh';
+import type { SkyUniforms } from './scene';
+import { buildChunkGeometry, makeDetailTexture, type ChunkMeshData } from './terrainMesh';
+import { makeWater } from './water';
 
 interface ChunkView {
   cx: number;
@@ -33,7 +35,7 @@ const variantOf = (turn: number, count: number) => Math.floor(turn * 977) % coun
 export class WorldView {
   readonly group = new THREE.Group();
   private props = new Props();
-  private terrainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+  private terrainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: makeDetailTexture(), side: THREE.DoubleSide });
   private chunks = new Map<string, ChunkView>();
   private queue: { cx: number; cz: number; cells: number; distance: number }[] = [];
   private pebbles = new Map<string, THREE.Mesh>();
@@ -46,13 +48,10 @@ export class WorldView {
     private terrain: Terrain,
     private objectsOf: (cx: number, cz: number) => ChunkObjects,
     private isCollected: (pebbleId: string) => boolean,
+    sky: SkyUniforms,
+    fog: THREE.Fog,
   ) {
-    this.water = new THREE.Mesh(
-      new THREE.PlaneGeometry(2400, 2400),
-      new THREE.MeshLambertMaterial({ color: 0x3f86ad, transparent: true, opacity: 0.82, depthWrite: false }),
-    );
-    this.water.rotation.x = -Math.PI / 2;
-    this.water.renderOrder = 1;
+    this.water = makeWater(sky, fog);
     this.group.add(this.water);
   }
 
@@ -68,7 +67,7 @@ export class WorldView {
   update(x: number, z: number, dt: number, budgetMs: number): void {
     this.time += dt;
     this.props.grassTime.value = this.time;
-    this.water.position.set(x, Math.sin(this.time * 0.6) * 0.03, z);
+    this.water.position.set(x, 0, z);
     for (const f of this.flames) f.scale.y = 1 + Math.sin(this.time * 9 + f.position.x) * 0.2;
     for (const mesh of this.pebbles.values()) {
       mesh.rotation.y = this.time * 1.2;
@@ -155,7 +154,8 @@ export class WorldView {
     } else {
       // Trees: one instanced mesh per tree type and colour.
       for (let type = 0; type < 3; type++) {
-        const variants = props.trees[type];
+        // Detailed models close by, simple ones in the middle distance.
+        const variants = (medium ? props.trees : props.simpleTrees)[type];
         for (let variant = 0; variant < variants.length; variant++) {
           const list = objects.trees.filter((t) => t.type === type && variantOf(t.turn, variants.length) === variant);
           if (list.length === 0) continue;
@@ -169,6 +169,7 @@ export class WorldView {
             mesh.setColorAt(i, tint.setScalar(0.9 + t.turn * 0.2));
           });
           mesh.castShadow = near;
+          mesh.receiveShadow = near;
           group.add(mesh);
         }
       }
@@ -266,7 +267,7 @@ export class WorldView {
     }
     if (spots.length === 0) return;
     const mesh = new THREE.InstancedMesh(this.props.grass, this.props.grassMaterial, spots.length / 4);
-    const width = near ? 1.15 : 2.3; // fewer, wider tufts further away
+    const width = near ? 1.1 : 2.3; // fewer, wider tufts further away
     for (let i = 0; i < spots.length; i += 4) {
       const x = spots[i];
       const z = spots[i + 2];
@@ -278,7 +279,7 @@ export class WorldView {
       mesh.setMatrixAt(i / 4, dummy.matrix);
       // Patches drift between gold and orange.
       const patch = 0.5 + 0.5 * Math.sin(x * 0.045 + Math.sin(z * 0.038) * 2.1);
-      mesh.setColorAt(i / 4, tint.setHex(0xf0bd52).lerp(tintB.setHex(0xe58a36), patch * 0.8).multiplyScalar(1.25 + (scale - 0.85) * 0.2));
+      mesh.setColorAt(i / 4, tint.setHex(0xe0b660).lerp(tintB.setHex(0xcc8a44), patch * 0.8).multiplyScalar(1.12 + (scale - 0.85) * 0.2));
     }
     mesh.receiveShadow = near;
     group.add(mesh);

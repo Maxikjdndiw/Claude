@@ -2,110 +2,191 @@
 // Each model is one merged geometry with vertex colours, so a whole chunk of
 // trees is drawn with a single instanced draw call.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { campLayout } from '../sim/world/objects';
 import type { Feature } from '../sim/world/terrain';
 
-/** Gives every vertex of a geometry the same colour and moves it into place. */
-function part(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.BufferGeometry {
+/** A repeatable pseudo-random number from a position (so shared corners move together). */
+function hash3(x: number, y: number, z: number): number {
+  const v = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+interface PartOptions {
+  /** Push vertices in and out by up to this much, for a natural, uneven shape. */
+  jitter?: number;
+  /** Brightness at the bottom and top of the part (blended over its height). */
+  shade?: [number, number];
+}
+
+/** Colours a geometry, optionally roughens and shades it, and moves it into place. */
+function part(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0, options: PartOptions = {}): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo;
-  g.translate(x, y, z);
-  const c = new THREE.Color(color);
-  const colors = new Float32Array(g.attributes.position.count * 3);
-  for (let i = 0; i < colors.length; i += 3) {
-    colors[i] = c.r;
-    colors[i + 1] = c.g;
-    colors[i + 2] = c.b;
+  const pos = g.attributes.position;
+  if (options.jitter) {
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i);
+      const py = pos.getY(i);
+      const pz = pos.getZ(i);
+      const k = 1 + (hash3(px, py, pz) - 0.5) * 2 * options.jitter;
+      pos.setXYZ(i, px * k, py * (1 + (k - 1) * 0.5), pz * k);
+    }
   }
+  g.computeBoundingBox();
+  const minY = g.boundingBox!.min.y;
+  const spanY = Math.max(0.001, g.boundingBox!.max.y - minY);
+  const c = new THREE.Color(color);
+  const [low, high] = options.shade ?? [1, 1];
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const k = low + (high - low) * ((pos.getY(i) - minY) / spanY);
+    colors.set([c.r * k, c.g * k, c.b * k], i * 3);
+  }
+  g.translate(x, y, z);
   g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   g.deleteAttribute('uv');
+  g.deleteAttribute('normal');
   return g;
 }
+/** Joins parts into one geometry with flat faces (for simple, far-away models). */
 const merge = (parts: THREE.BufferGeometry[]) => {
   const g = mergeGeometries(parts)!;
   g.computeVertexNormals();
   return g;
 };
+/** Joins parts into one geometry with smooth, rounded shading. */
+const mergeSmooth = (parts: THREE.BufferGeometry[]) => {
+  const g = mergeVertices(mergeGeometries(parts)!, 0.001);
+  g.computeVertexNormals();
+  return g;
+};
 
-const BARK = 0x6b4a32;
+const BARK = 0x5e4330;
 
-/** A tall, narrow conifer made of stacked tiers. `color` is the foliage colour. */
+// --- detailed models, used close to the player --------------------------------------
+
+/** A tall conifer: many drooping tiers, dark inside and bright at the branch tips. */
 function pine(color: number): THREE.BufferGeometry {
-  const c = new THREE.Color(color);
-  const tier = (radius: number, height: number, y: number, shade: number) =>
-    part(new THREE.ConeGeometry(radius, height, 7), c.clone().multiplyScalar(shade).getHex(), 0, y, 0);
-  return merge([
-    part(new THREE.CylinderGeometry(0.13, 0.2, 1.3, 5), BARK, 0, 0.65, 0),
-    tier(1.35, 1.9, 1.9, 0.78),
-    tier(1.15, 1.8, 2.9, 0.86),
-    tier(0.95, 1.7, 3.9, 0.94),
-    tier(0.72, 1.6, 4.9, 1.02),
-    tier(0.48, 1.5, 5.9, 1.1),
+  const parts = [part(new THREE.CylinderGeometry(0.07, 0.22, 7.2, 7), BARK, 0, 3.6, 0, { shade: [0.8, 1.1] })];
+  const TIERS = 9;
+  for (let i = 0; i < TIERS; i++) {
+    const t = i / (TIERS - 1);
+    const radius = 1.55 - t * 1.2;
+    const height = 1.5 - t * 0.5;
+    const cone = new THREE.ConeGeometry(radius, height, 9, 2, true);
+    cone.rotateY(i * 0.7);
+    // The rim of each tier (the branch tips) catches the light; the top hides under the next tier.
+    parts.push(part(cone, color, 0, 1.7 + t * 5.2, 0, { jitter: 0.13, shade: [1.12, 0.62] }));
+  }
+  return mergeSmooth(parts);
+}
+
+/** A leaf tree: a lumpy crown made of several rounded masses. */
+function roundTree(color: number): THREE.BufferGeometry {
+  const crown = (r: number, x: number, y: number, z: number) =>
+    part(new THREE.IcosahedronGeometry(r, 1), color, x, y, z, { jitter: 0.16, shade: [0.66, 1.14] });
+  const branch = (angle: number, turn: number) => {
+    const g = new THREE.CylinderGeometry(0.05, 0.09, 1.5, 5);
+    g.translate(0, 0.75, 0);
+    g.rotateZ(angle);
+    g.rotateY(turn);
+    return part(g, BARK, 0, 2.0, 0);
+  };
+  return mergeSmooth([
+    part(new THREE.CylinderGeometry(0.13, 0.26, 2.9, 7), BARK, 0, 1.45, 0, { shade: [0.8, 1.1] }),
+    branch(0.8, 0.3),
+    branch(-0.7, 1.9),
+    branch(0.75, 3.6),
+    crown(1.45, 0, 3.7, 0),
+    crown(1.05, 1.0, 3.0, 0.35),
+    crown(0.95, -0.85, 3.2, -0.55),
+    crown(0.9, 0.15, 3.1, -1.0),
+    crown(0.85, 0.2, 4.6, 0.25),
   ]);
 }
-function roundTree(color: number): THREE.BufferGeometry {
-  const c = new THREE.Color(color);
-  const blob = (r: number, x: number, y: number, z: number, shade: number) =>
-    part(new THREE.IcosahedronGeometry(r, 0), c.clone().multiplyScalar(shade).getHex(), x, y, z);
+
+function rock(): THREE.BufferGeometry {
+  const g = new THREE.IcosahedronGeometry(0.72, 1);
+  g.scale(1, 0.78, 0.9);
+  return mergeSmooth([part(g, 0x8b8494, 0, 0, 0, { jitter: 0.2, shade: [0.72, 1.1] })]);
+}
+
+// --- simple models, used further away ---------------------------------------------------
+
+function simplePine(color: number): THREE.BufferGeometry {
+  const tier = (radius: number, height: number, y: number) => part(new THREE.ConeGeometry(radius, height, 7), color, 0, y, 0, { shade: [1.05, 0.8] });
   return merge([
-    part(new THREE.CylinderGeometry(0.16, 0.22, 2.2, 5), BARK, 0, 1.1, 0),
-    blob(1.55, 0, 3.3, 0, 1),
-    blob(1.05, 0.95, 2.6, 0.3, 0.86),
-    blob(0.9, -0.8, 2.9, -0.5, 1.1),
-    blob(0.8, 0.1, 4.3, 0.2, 1.12),
+    part(new THREE.CylinderGeometry(0.13, 0.2, 1.6, 5), BARK, 0, 0.8, 0),
+    tier(1.4, 2.2, 2.2),
+    tier(1.1, 2.1, 3.6),
+    tier(0.8, 2.0, 5.0),
+    tier(0.5, 1.8, 6.3),
+  ]);
+}
+function simpleRound(color: number): THREE.BufferGeometry {
+  const blob = (r: number, x: number, y: number, z: number) => part(new THREE.IcosahedronGeometry(r, 0), color, x, y, z, { shade: [0.75, 1.1] });
+  return merge([
+    part(new THREE.CylinderGeometry(0.16, 0.24, 2.6, 5), BARK, 0, 1.3, 0),
+    blob(1.55, 0, 3.6, 0),
+    blob(1.05, 0.95, 3.0, 0.3),
+    blob(0.9, -0.8, 3.2, -0.5),
   ]);
 }
 function bareTree(): THREE.BufferGeometry {
-  const branch = (angle: number, y: number, side: number) => {
-    const g = new THREE.CylinderGeometry(0.05, 0.08, 1.4, 4);
-    g.rotateZ(angle * side);
-    g.translate(0.5 * side, y, 0);
-    return part(g, 0x6a5b4c);
+  const branch = (angle: number, y: number, turn: number) => {
+    const g = new THREE.CylinderGeometry(0.03, 0.08, 1.5, 5);
+    g.translate(0, 0.75, 0);
+    g.rotateZ(angle);
+    g.rotateY(turn);
+    return part(g, 0x6a5b4c, 0, y, 0);
   };
-  return merge([
-    part(new THREE.CylinderGeometry(0.1, 0.2, 3.6, 5), 0x6a5b4c, 0, 1.8, 0),
-    branch(-0.9, 2.6, 1),
-    branch(-1.0, 3.1, -1),
-    part(new THREE.IcosahedronGeometry(0.7, 0), 0x77875a, 0, 3.9, 0),
+  return mergeSmooth([
+    part(new THREE.CylinderGeometry(0.06, 0.2, 4.2, 6), 0x6a5b4c, 0, 2.1, 0, { shade: [0.8, 1.1] }),
+    branch(0.9, 2.2, 0.4),
+    branch(-0.8, 2.8, 2.0),
+    branch(0.7, 3.3, 4.1),
+    part(new THREE.IcosahedronGeometry(0.6, 1), 0x7c8a58, 0, 4.3, 0, { jitter: 0.2, shade: [0.7, 1.1] }),
   ]);
-}
-function rock(): THREE.BufferGeometry {
-  const g = new THREE.IcosahedronGeometry(0.72, 0);
-  g.scale(1, 0.78, 0.9);
-  return merge([part(g, 0x8f877c)]);
 }
 function post(): THREE.BufferGeometry {
   return merge([
-    part(new THREE.CylinderGeometry(0.11, 0.14, 1.5, 6), 0x8a6238, 0, 0.75, 0),
-    part(new THREE.CylinderGeometry(0.15, 0.15, 0.2, 6), 0xd9972f, 0, 1.25, 0),
+    part(new THREE.CylinderGeometry(0.11, 0.14, 1.5, 8), 0x8a6238, 0, 0.75, 0, { shade: [0.8, 1.05] }),
+    part(new THREE.CylinderGeometry(0.15, 0.15, 0.2, 8), 0xd9972f, 0, 1.25, 0),
   ]);
 }
+
 /**
- * A tuft of tall grass: a fan of thin triangles. Vertex colours run from dark
- * at the root to bright at the tip; the hue comes from the instance colour.
- * All normals point up so the whole tuft is lit evenly.
+ * A tuft of tall grass: thin blades that bend over towards the tip.
+ * Vertex colours run from dark at the root to bright at the tip; the hue
+ * comes from the instance colour. All normals point up so the tuft is lit evenly.
  */
 function grassTuft(): THREE.BufferGeometry {
   const positions: number[] = [];
   const colors: number[] = [];
-  const BLADES = 10;
+  const BLADES = 9;
   for (let i = 0; i < BLADES; i++) {
     const angle = (i / BLADES) * Math.PI * 2 + i * 0.7;
-    const out = 0.08 + (i % 4) * 0.1; // distance of the root from the centre
-    const height = 0.7 + ((i * 5) % 4) * 0.13;
-    const lean = 0.22 + (i % 2) * 0.16;
+    const out = 0.05 + (i % 4) * 0.09; // distance of the root from the centre
+    const height = 0.65 + ((i * 5) % 4) * 0.14;
+    const lean = 0.16 + (i % 3) * 0.12;
     const cx = Math.cos(angle);
     const cz = Math.sin(angle);
     const rx = cx * out;
     const rz = cz * out;
-    // Root edge is at right angles to the direction the blade leans in.
-    const a = [rx - cz * 0.11, 0, rz + cx * 0.11];
-    const b = [rx + cz * 0.11, 0, rz - cx * 0.11];
-    const tip = [rx + cx * lean, height, rz + cz * lean];
-    // Each blade twice, once per side, so both sides get the same upward
-    // normal and the same light (a double-sided material would darken the back).
-    positions.push(...a, ...b, ...tip, ...b, ...a, ...tip);
-    for (let k = 0; k < 2; k++) colors.push(0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.15, 1.15, 1.15);
+    const w = 0.042; // half width at the root
+    // root left, root right, middle left, middle right, tip
+    const p = [
+      [rx - cz * w, 0, rz + cx * w],
+      [rx + cz * w, 0, rz - cx * w],
+      [rx + cx * lean * 0.35 - cz * w * 0.7, height * 0.55, rz + cz * lean * 0.35 + cx * w * 0.7],
+      [rx + cx * lean * 0.35 + cz * w * 0.7, height * 0.55, rz + cz * lean * 0.35 - cx * w * 0.7],
+      [rx + cx * lean, height, rz + cz * lean],
+    ];
+    const shade = [0.62, 0.62, 0.95, 0.95, 1.2];
+    for (const k of [0, 1, 2, 2, 1, 3, 2, 3, 4]) {
+      positions.push(...p[k]);
+      colors.push(shade[k], shade[k], shade[k]);
+    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -117,30 +198,32 @@ function grassTuft(): THREE.BufferGeometry {
 }
 
 /** Foliage colours. Each tree picks one of its type's colours. */
-export const PINE_COLORS = [0x2f6352, 0x4f7f43, 0xe3aa3a, 0xd9782c, 0xeec35a];
-export const ROUND_COLORS = [0xdc7a2c, 0xe9b744, 0xb8532d, 0x8e9c40];
+export const PINE_COLORS = [0x2c5a4a, 0x47723e, 0xcfa043, 0xc27434, 0xd9b55e];
+export const ROUND_COLORS = [0xc87632, 0xd6ab4a, 0xa85433, 0x86923f];
 
 export class Props {
-  /** trees[type][colour variant] */
+  /** Detailed trees for close up: trees[type][colour variant] */
   readonly trees = [PINE_COLORS.map(pine), ROUND_COLORS.map(roundTree), [bareTree()]];
+  /** Simple trees for the middle distance. */
+  readonly simpleTrees = [PINE_COLORS.map(simplePine), ROUND_COLORS.map(simpleRound), [bareTree()]];
   /** A single cone that stands in for any tree far away. */
-  readonly farTree = merge([part(new THREE.ConeGeometry(1.25, 5.6, 5), 0xffffff, 0, 3.2, 0)]);
+  readonly farTree = merge([part(new THREE.ConeGeometry(1.25, 6.4, 6), 0xffffff, 0, 3.6, 0, { shade: [1.05, 0.8] })]);
   /** Tall grass sways in the wind; `grassTime.value` is advanced every frame. */
   readonly grassTime = { value: 0 };
   readonly grassMaterial = this.makeGrassMaterial();
   readonly rock = rock();
   readonly post = post();
   readonly grass = grassTuft();
-  readonly pebble = new THREE.IcosahedronGeometry(0.3, 0);
+  readonly pebble = new THREE.IcosahedronGeometry(0.3, 1);
   /** One shared material for everything with vertex colours. */
-  readonly material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-  readonly pebbleMaterial = new THREE.MeshLambertMaterial({ color: 0xfff0c2, emissive: 0xe0a030, emissiveIntensity: 0.9, flatShading: true });
+  readonly material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  readonly pebbleMaterial = new THREE.MeshLambertMaterial({ color: 0xfff0c2, emissive: 0xe0a030, emissiveIntensity: 0.9 });
   private fireMaterial = new THREE.MeshBasicMaterial({ color: 0xffa040 });
   private windowMaterial = new THREE.MeshBasicMaterial({ color: 0xffd98a });
 
   private makeGrassMaterial(): THREE.MeshLambertMaterial {
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-    // Small shader addition: push the tips sideways with a slow wave.
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    // Small shader additions: sway in the wind, and light both sides of a blade the same: push the tips sideways with a slow wave.
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.grassTime;
       shader.vertexShader = shader.vertexShader
@@ -154,6 +237,10 @@ export class Props {
             transformed.z += wave * 0.05 * transformed.y * transformed.y;
           #endif`,
         );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_begin>',
+        'vec3 normal = normalize( vNormal ); vec3 nonPerturbedNormal = normal;',
+      );
     };
     return material;
   }
@@ -162,7 +249,7 @@ export class Props {
   buildCamp(f: Feature): THREE.Group {
     const layout = campLayout(f);
     const group = new THREE.Group();
-    const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const flat = (color: number) => new THREE.MeshLambertMaterial({ color });
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, f.y + y, z);

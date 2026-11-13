@@ -1,4 +1,5 @@
-// Builds the flat-shaded, vertex-coloured mesh of one terrain chunk.
+// Builds the mesh of one terrain chunk: smooth normals, colours blended per
+// vertex and a fine detail texture on top.
 import * as THREE from 'three';
 import { WORLD } from '../config';
 import type { GroundInfo, Terrain } from '../sim/world/terrain';
@@ -6,11 +7,11 @@ import type { GroundInfo, Terrain } from '../sim/world/terrain';
 const C = (hex: number) => new THREE.Color(hex);
 // Autumn palette: golden grass, dark earth tracks, blue-violet rock.
 const COLORS = {
-  meadow: C(0xd9a744),
-  forestGrass: C(0xcc9038),
+  meadow: C(0xc9a04e),
+  forestGrass: C(0xb98a40),
   highGrass: C(0xc9a65e),
-  forestFloor: C(0xa8672e),
-  dirt: C(0x6e4b36),
+  forestFloor: C(0x99663a),
+  dirt: C(0x7a5540),
   mud: C(0x5b4032),
   deepMud: C(0x3e2b23),
   rock: C(0x8a84a6),
@@ -21,7 +22,7 @@ const COLORS = {
 const tmp = new THREE.Color();
 
 /**
- * Colour of a piece of ground. `variation` is a number in 0..1 that differs per face.
+ * Colour of a piece of ground. `variation` is a number in 0..1 that changes slowly over the land.
  * Returns how much tall grass grows there: 0 = none, 1 = some, 2 = a lot.
  */
 function groundColor(g: GroundInfo, variation: number, out: THREE.Color): number {
@@ -46,12 +47,62 @@ function groundColor(g: GroundInfo, variation: number, out: THREE.Color): number
       break;
     default:
       out.copy(COLORS.rock);
-      // Snow on the high, not too steep parts.
+      // Darker rock faces where it is steep, snow on the high, flatter parts.
+      out.multiplyScalar(1.05 - Math.min(0.3, g.slope * 0.18));
       if (g.height > 62 && g.slope < 0.9) out.lerp(COLORS.snow, Math.min(1, (g.height - 62) / 10));
   }
   if (g.waterDepth > 0) out.lerp(COLORS.riverBed, Math.min(0.8, g.waterDepth * 0.7));
-  out.multiplyScalar(0.94 + variation * 0.12);
+  out.multiplyScalar(0.98 + variation * 0.28);
   return g.height > 0.4 && g.slope < 0.75 ? grass : 0;
+}
+
+/** A tileable grey texture with fine grain and soft blotches. It is multiplied onto the ground colours. */
+export function makeDetailTexture(): THREE.Texture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const image = ctx.createImageData(size, size);
+  let s = 12345;
+  const rnd = () => {
+    s = (Math.imul(s, 1664525) + 1013904223) | 0;
+    return (s >>> 8) / 16777216;
+  };
+  // Value noise on a wrapping grid, so the texture repeats without seams.
+  const layer = (cells: number) => {
+    const grid = new Float32Array(cells * cells);
+    for (let i = 0; i < grid.length; i++) grid[i] = rnd();
+    return (x: number, y: number) => {
+      const gx = (x / size) * cells;
+      const gy = (y / size) * cells;
+      const x0 = Math.floor(gx);
+      const y0 = Math.floor(gy);
+      let fx = gx - x0;
+      let fy = gy - y0;
+      fx = fx * fx * (3 - 2 * fx);
+      fy = fy * fy * (3 - 2 * fy);
+      const at = (i: number, j: number) => grid[(((j % cells) + cells) % cells) * cells + (((i % cells) + cells) % cells)];
+      return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+    };
+  };
+  const coarse = layer(6);
+  const medium = layer(24);
+  const fine = layer(96);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const v = 0.62 + coarse(x, y) * 0.14 + medium(x, y) * 0.14 + fine(x, y) * 0.1 + rnd() * 0.06;
+      const c = Math.round(Math.min(1, v) * 255);
+      const i = (y * size + x) * 4;
+      image.data[i] = image.data[i + 1] = image.data[i + 2] = c;
+      image.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
 }
 
 export interface ChunkMeshData {
@@ -72,61 +123,89 @@ export function buildChunkGeometry(terrain: Terrain, cx: number, cz: number, cel
   const z0 = cz * size;
   const n = cells + 1;
 
-  const heights = new Float32Array(n * n);
-  const grass = new Uint8Array(cells * cells);
-  for (let ix = 0; ix < n; ix++) {
-    for (let iz = 0; iz < n; iz++) heights[ix * n + iz] = terrain.height(x0 + ix * step, z0 + iz * step);
+  // Heights with one extra row all around, so normals at the chunk border
+  // match the neighbour chunk and no seam is visible.
+  const m = n + 2;
+  const H = new Float32Array(m * m);
+  for (let ix = -1; ix <= n; ix++) {
+    for (let iz = -1; iz <= n; iz++) H[(ix + 1) * m + iz + 1] = terrain.height(x0 + ix * step, z0 + iz * step);
   }
 
-  // 2 triangles per cell plus a "skirt" along the 4 edges. The skirt hangs
-  // down and hides the small gaps between chunks of different detail.
-  const vertexCount = cells * cells * 6 + cells * 4 * 6;
+  // Main grid vertices plus a "skirt" along the 4 edges. The skirt hangs down
+  // and hides the small gaps between chunks of different detail.
+  const vertexCount = n * n + 4 * n;
   const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
   const colors = new Float32Array(vertexCount * 3);
-  let v = 0;
-  const put = (x: number, y: number, z: number) => {
-    positions[v * 3] = x;
-    positions[v * 3 + 1] = y;
-    positions[v * 3 + 2] = z;
-    colors[v * 3] = tmp.r;
-    colors[v * 3 + 1] = tmp.g;
-    colors[v * 3 + 2] = tmp.b;
-    v++;
-  };
-  const SKIRT = 5;
+  const uvs = new Float32Array(vertexCount * 2);
+  const heights = new Float32Array(n * n);
+  const grassAt = new Uint8Array(n * n);
+  const TILE = 7; // metres per repeat of the detail texture
 
-  for (let ix = 0; ix < cells; ix++) {
-    for (let iz = 0; iz < cells; iz++) {
-      const xa = x0 + ix * step;
-      const xb = xa + step;
-      const za = z0 + iz * step;
-      const zb = za + step;
-      const h00 = heights[ix * n + iz];
-      const h10 = heights[(ix + 1) * n + iz];
-      const h01 = heights[ix * n + iz + 1];
-      const h11 = heights[(ix + 1) * n + iz + 1];
-      const sx = (h10 + h11 - h00 - h01) / (2 * step);
-      const sz = (h01 + h11 - h00 - h10) / (2 * step);
-      const info = terrain.classify(xa + step / 2, za + step / 2, (h00 + h10 + h01 + h11) / 4, Math.sqrt(sx * sx + sz * sz));
-      // Cheap per-face variation (rendering only, does not need to be exact).
-      const variation = (((ix * 7 + iz * 13 + cx * 3 + cz * 5) % 9) + 9) % 9 / 8;
-      grass[ix * cells + iz] = groundColor(info, variation, tmp);
-      put(xa, h00, za); put(xa, h01, zb); put(xb, h10, za);
-      tmp.multiplyScalar(0.97);
-      put(xb, h10, za); put(xa, h01, zb); put(xb, h11, zb);
-
-      // Skirts on the outer edges.
-      if (iz === 0) { put(xa, h00, za); put(xb, h10, za); put(xa, h00 - SKIRT, za); put(xb, h10, za); put(xb, h10 - SKIRT, za); put(xa, h00 - SKIRT, za); }
-      if (iz === cells - 1) { put(xa, h01, zb); put(xa, h01 - SKIRT, zb); put(xb, h11, zb); put(xb, h11, zb); put(xa, h01 - SKIRT, zb); put(xb, h11 - SKIRT, zb); }
-      if (ix === 0) { put(xa, h00, za); put(xa, h00 - SKIRT, za); put(xa, h01, zb); put(xa, h01, zb); put(xa, h00 - SKIRT, za); put(xa, h01 - SKIRT, zb); }
-      if (ix === cells - 1) { put(xb, h10, za); put(xb, h11, zb); put(xb, h10 - SKIRT, za); put(xb, h11, zb); put(xb, h11 - SKIRT, zb); put(xb, h10 - SKIRT, za); }
+  for (let ix = 0; ix < n; ix++) {
+    for (let iz = 0; iz < n; iz++) {
+      const i = ix * n + iz;
+      const x = x0 + ix * step;
+      const z = z0 + iz * step;
+      const h = H[(ix + 1) * m + iz + 1];
+      heights[i] = h;
+      const dx = (H[(ix + 2) * m + iz + 1] - H[ix * m + iz + 1]) / (2 * step);
+      const dz = (H[(ix + 1) * m + iz + 2] - H[(ix + 1) * m + iz]) / (2 * step);
+      const slope = Math.sqrt(dx * dx + dz * dz);
+      const len = Math.sqrt(dx * dx + dz * dz + 1);
+      // Slow colour drift across the land (rendering only).
+      const variation = 0.5 + 0.25 * Math.sin(x * 0.043 + Math.sin(z * 0.031) * 2.3) + 0.25 * Math.sin(z * 0.11 + x * 0.07);
+      grassAt[i] = groundColor(terrain.classify(x, z, h, slope), variation, tmp);
+      positions.set([x, h, z], i * 3);
+      normals.set([-dx / len, 1 / len, -dz / len], i * 3);
+      colors.set([tmp.r, tmp.g, tmp.b], i * 3);
+      uvs.set([x / TILE, z / TILE], i * 2);
     }
   }
 
+  const indices: number[] = [];
+  const grass = new Uint8Array(cells * cells);
+  for (let ix = 0; ix < cells; ix++) {
+    for (let iz = 0; iz < cells; iz++) {
+      const a = ix * n + iz;
+      const b = a + 1;
+      const c = a + n;
+      const d = c + 1;
+      indices.push(a, b, c, c, b, d);
+      grass[ix * cells + iz] = Math.min(grassAt[a], grassAt[b], grassAt[c], grassAt[d]);
+    }
+  }
+
+  // Skirts: copy each edge vertex, lower it, and connect it to the edge.
+  let v = n * n;
+  const SKIRT = 6;
+  const edge = (indexOf: (k: number) => number) => {
+    const first = v;
+    for (let k = 0; k < n; k++) {
+      const src = indexOf(k);
+      positions.set([positions[src * 3], positions[src * 3 + 1] - SKIRT, positions[src * 3 + 2]], v * 3);
+      normals.set([normals[src * 3], normals[src * 3 + 1], normals[src * 3 + 2]], v * 3);
+      colors.set([colors[src * 3], colors[src * 3 + 1], colors[src * 3 + 2]], v * 3);
+      uvs.set([uvs[src * 2], uvs[src * 2 + 1]], v * 2);
+      v++;
+    }
+    for (let k = 0; k < cells; k++) {
+      const a = indexOf(k);
+      const b = indexOf(k + 1);
+      indices.push(a, b, first + k, b, first + k + 1, first + k);
+    }
+  };
+  edge((k) => k); // ix = 0
+  edge((k) => cells * n + k); // ix = cells
+  edge((k) => k * n); // iz = 0
+  edge((k) => k * n + cells); // iz = cells
+
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geometry.computeVertexNormals(); // every triangle has its own vertices, so this gives flat shading
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
   geometry.computeBoundingSphere();
   return { geometry, heights, grass };
 }

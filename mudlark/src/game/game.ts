@@ -84,7 +84,7 @@ export class Game {
     this.progress = worldProgress(deps.save, seedText);
     this.collected = new Set(this.progress.collected);
     this.chunkPhysics = new ChunkPhysics(this.physics, this.terrain, (cx, cz) => this.objectsOf(cx, cz));
-    this.view = new WorldView(this.terrain, (cx, cz) => this.objectsOf(cx, cz), (id) => this.collected.has(id));
+    this.view = new WorldView(this.terrain, (cx, cz) => this.objectsOf(cx, cz), (id) => this.collected.has(id), deps.scene.sky, deps.scene.scene.fog as THREE.Fog);
 
     this.marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.28), new THREE.MeshBasicMaterial({ color: 0xffc44d }));
     this.marker.visible = false;
@@ -480,6 +480,7 @@ export class Game {
     this.car.updateWheels(vehicle);
     scene.updateSky(dt, actions.fastTime && this.active ? 150 : 1);
     this.car.setHeadlights(scene.darkness);
+    this.car.setReflection(scene.reflection);
     if (!this.active) chase.orbit(dt * 14, 0); // slow turn behind the title screen
     chase.update(this.car.group, speed, dt, (x, z) => this.terrain.height(x, z));
     scene.followWithSun(this.car.group.position);
